@@ -7,8 +7,7 @@ using System.Threading;
 using System.Windows.Forms;
 
 class PortableLauncher {
-    static bool English = !System.Globalization.CultureInfo.CurrentUICulture.Name.StartsWith("zh");
-    static string L(string zh, string en) { return English ? en : zh; }
+    static string L(string zh, string en) { return zh; }
     const string Url = "http://127.0.0.1:18731";
     static string Status() {
         try {

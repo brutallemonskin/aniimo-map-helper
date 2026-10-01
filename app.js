@@ -10,14 +10,15 @@ async function publishOverlay(force=false){
  if(!force&&Date.now()-overlayLastSent<200)return;
  overlaySending=true;overlayLastSent=Date.now();
  try{
-   const dungeon=result?.id===current?.id&&current?.id.startsWith('sanctum-');
+   const dungeon=bitmap&&current?.id.startsWith('sanctum-');
+   const confirmed=result?.id===current?.id;
    let image=null,title='等待识别地宫';
    if(dungeon){
      const copy=document.createElement('canvas');copy.width=504;copy.height=350;
      const b=mapBounds||{x:0,y:0,w:current.width,h:current.height},z=Math.min(copy.width/b.w,copy.height/b.h)*.94;
      paintMap(copy.getContext('2d'),z,(copy.width-b.w*z)/2-b.x*z,(copy.height-b.h*z)/2-b.y*z,.8);
      image=copy.toDataURL('image/png');
-     title=current.name+(result.held?' · 保留上次位置':result.position?' · 你的位置':' · 等待角色定位');
+     title=current.name+(!confirmed?' · 地图预览 · 尚未确认':result.held?' · 保留上次位置':result.position?' · 你的位置':' · 等待角色定位');
    }
    const response=await fetch('/api/overlay/frame',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image,title:t(title),language:I18N.language})});
    if(!response.ok)throw Error('悬浮窗同步失败');
@@ -117,10 +118,51 @@ function preview(){if(!frame)return;cc.clearRect(0,0,cap.width,cap.height);cc.dr
 $('newrun').onclick=newRun;$('outdoor-mode').onchange=()=>{newRun();notice('海岛模式已更换，请打开大地图重新校准。');};
 async function importFile(file){if(!file||!file.type.startsWith('image/'))return;stop();const im=await createImageBitmap(file);frame=im;cap.width=im.width;cap.height=im.height;newRun();$('capture-status').textContent='截图模式';preview();await identify();}
 $('file').onchange=e=>importFile(e.target.files[0]).catch(e=>notice(e.message));document.onpaste=e=>{const f=[...e.clipboardData.items].find(i=>i.type.startsWith('image/'));if(f)importFile(f.getAsFile()).catch(e=>notice(e.message));};
-function stop(){running=false;clearTimeout(timer);if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('stop').disabled=true;$('share').disabled=false;$('capture-status').textContent='未连接画面';generation++;}
+let captureEpoch=0,firstFrameDeadline=0,receivedCaptureFrame=false;
+function captureMessage(text){$('capture-status').textContent=text;$('empty').textContent=text;$('empty').hidden=false;}
+function stop(){
+ captureEpoch++;running=false;clearTimeout(timer);timer=null;
+ const previous=stream;stream=null;
+ if(previous)previous.getTracks().forEach(t=>{t.onended=null;t.stop();});
+ const video=$('video');video.pause?.();video.srcObject=null;frame=null;
+ $('stop').disabled=true;$('share').disabled=false;captureMessage('未连接画面');generation++;
+}
 $('stop').onclick=()=>{stop();notice('已停止读取游戏画面。');};
-$('share').onclick=async()=>{try{if(!navigator.mediaDevices?.getDisplayMedia)throw Error('当前浏览器不支持窗口读取，请用 Chrome 或 Edge 打开本地地址。');stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:8,max:8}},audio:false});$('video').srcObject=stream;await $('video').play();stream.getVideoTracks()[0].onended=()=>{stop();notice('窗口共享已结束。');};running=true;newRun();$('capture-status').textContent='持续识别中';$('stop').disabled=false;$('share').disabled=true;tick();}catch(e){notice('未开始读取：'+e.message);stop();}};
-async function tick(){if(!running)return;const started=performance.now();const v=$('video');if(v.videoWidth){cap.width=v.videoWidth;cap.height=v.videoHeight;frame=v;preview();await identify();}if(running)timer=setTimeout(tick,Math.max(0,Number($('interval').value)-(performance.now()-started)));}
+$('share').onclick=async()=>{
+ stop();const epoch=captureEpoch;$('share').disabled=true;$('stop').disabled=false;
+ captureMessage('请选择要共享的游戏窗口');
+ try{
+  if(!navigator.mediaDevices?.getDisplayMedia)throw Error('当前浏览器不支持窗口读取，请用 Chrome 或 Edge 打开本地地址。');
+  const selected=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:8,max:8}},audio:false});
+  if(epoch!==captureEpoch){selected.getTracks().forEach(t=>t.stop());return;}
+  stream=selected;const track=selected.getVideoTracks()[0];
+  if(!track||track.readyState==='ended')throw Error('所选窗口的共享已经结束，请重新选择。');
+  track.onended=()=>{if(epoch!==captureEpoch)return;stop();notice('窗口共享已结束。');};
+  const video=$('video');video.muted=true;video.playsInline=true;video.srcObject=selected;
+  running=true;receivedCaptureFrame=false;firstFrameDeadline=performance.now()+12000;newRun();
+  captureMessage('已授权，正在等待游戏画面');notice('请切回游戏并保持窗口打开；收到画面后会自动开始识别。');
+  // A play promise may remain pending until the source supplies its first
+  // frame. Do not let it block status updates, cancellation or the watchdog.
+  Promise.resolve(video.play()).catch(e=>{if(epoch!==captureEpoch)return;stop();notice('画面播放失败：'+e.message);});
+  tick(epoch);
+ }catch(e){if(epoch!==captureEpoch)return;stop();notice(e.name==='NotAllowedError'?'共享已取消或未获授权，请重新选择游戏窗口。':'未开始读取：'+e.message);}
+};
+function scanDelay(interval,elapsed){return Math.max(50,elapsed*.5,interval-elapsed);}
+async function tick(epoch=captureEpoch){
+ if(!running||epoch!==captureEpoch)return;const started=performance.now();
+ try{
+  const video=$('video');const track=stream?.getVideoTracks()[0];
+  if(!track||track.readyState==='ended'){stop();notice('窗口共享已结束。');return;}
+  if(video.readyState>=2&&video.videoWidth>0&&video.videoHeight>0&&!track.muted){
+   cap.width=video.videoWidth;cap.height=video.videoHeight;frame=video;preview();
+   if(!receivedCaptureFrame){receivedCaptureFrame=true;notice('已收到游戏画面，正在识别。');}
+   $('capture-status').textContent='持续识别中';await identify();
+  }else if(!receivedCaptureFrame&&performance.now()>firstFrameDeadline){
+   stop();notice('已授权，但 12 秒内未收到游戏画面。请保持游戏窗口打开且不要最小化；仍无画面时，可在共享框中尝试“整个屏幕”。');
+  }else captureMessage(receivedCaptureFrame?'画面暂时暂停，请切回游戏':'已授权，正在等待游戏画面');
+ }catch(e){if(epoch===captureEpoch)notice('读取画面失败：'+e.message);}
+ finally{if(running&&epoch===captureEpoch)timer=setTimeout(()=>tick(epoch),receivedCaptureFrame?scanDelay(Number($('interval').value),performance.now()-started):200);}
+}
 function signature(){const c=document.createElement('canvas');c.width=c.height=32;const x=c.getContext('2d');x.drawImage(temp,0,0,32,32);const d=x.getImageData(0,0,32,32).data;return Array.from({length:1024},(_,i)=>Math.round((d[i*4]+d[i*4+1]+d[i*4+2])/24));}
 function evidence(r,sig){
  const changed=!lastSignature||sig.reduce((s,v,i)=>s+Math.abs(v-lastSignature[i]),0)/sig.length>.7;
@@ -146,8 +188,12 @@ async function identify(){
  const tallies=evidence(out,sig);result=out.status==='matched'?out.candidates[0]:null;
  const ranked=[...(out.candidates||[])].sort((a,b)=>(tallies.get(b.id)?.value||0)-(tallies.get(a.id)?.value||0));
  const leader=ranked[0],lt=leader&&tallies.get(leader.id),runner=ranked[1]&&tallies.get(ranked[1].id);
- const eligible=leader&&(leader.method==='doors'?leader.score>=50:leader.inliers>=10&&leader.score>=8);
- const accumulated=!result&&eligible&&lt?.frames>=3&&lt.value>(runner?.value||0)*1.65;
+ const currentLead=out.candidates?.[0],currentRunner=out.candidates?.[1];
+ const clearLead=leader?.id===currentLead?.id&&(!currentRunner||(currentLead.score-currentRunner.score>=8&&currentLead.score>=currentRunner.score*1.2));
+ const eligible=leader&&(leader.method==='doors'?leader.score>=45:leader.inliers>=10&&leader.score>=8);
+ // Two distinct explored views can confirm a clearly leading candidate.
+ // Repeating the same still image does not count as new evidence.
+ const accumulated=!result&&clearLead&&eligible&&lt?.frames>=2&&lt.value>(runner?.value||0)*1.5;
  if(accumulated)result=leader;
  if(result)rememberPosition(result);
  $('position-status').textContent=result?.position?(out.position_source==='manual'?'手动位置 · 点重置恢复自动追踪':'已定位角色 · 可关闭大地图继续追踪'):out.position_source==='auto'?'已看到箭头，但尚未确认地图位置':'当前画面无法定位角色';
@@ -186,5 +232,5 @@ function pointName(point){
 window.addEventListener('languagechange',()=>{draw();publishOverlay(true);});
 
 // Restore only supported intervals; storage may be unavailable in private mode.
-try { const saved=localStorage.getItem('aniimo-scan-interval'); if(['250','500','1000'].includes(saved)) $('interval').value=saved; } catch(e) {}
+try { const saved=localStorage.getItem('aniimo-scan-interval'); if(['250','500','1000','2000','3000'].includes(saved)) $('interval').value=saved; } catch(e) {}
 $('interval').onchange=()=>{try {localStorage.setItem('aniimo-scan-interval',$('interval').value);} catch(e) {}};

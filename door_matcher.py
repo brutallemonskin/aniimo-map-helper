@@ -35,7 +35,10 @@ class DoorMatcher:
         ys=[(s,c) for s,c in ys if s[2]<w*.12 and s[3]<h*.15]
         bs=[(s,c) for s,c in bs if s[2]<w*.1 and s[3]<h*.12]
         orange=cv2.inRange(hsv,(5,90,180),(21,255,255))
-        orange=cv2.morphologyEx(orange,cv2.MORPH_CLOSE,np.ones((3,3),np.uint8))
+        # White details can split one orange gate into disconnected color bands.
+        # Close gaps at the normalized icon scale before counting gates.
+        gate_kernel=max(3,round(w/240));gate_kernel+=1-gate_kernel%2
+        orange=cv2.morphologyEx(orange,cv2.MORPH_CLOSE,np.ones((gate_kernel,gate_kernel),np.uint8))
         os=self.blobs(orange,max(10,w*h*.00004))
         os=[(s,c) for s,c in os if s[2]<w*.08 and s[3]<h*.12 and not(c[0]<w*.2 and c[1]<h*.2)]
         gate_visible=len(os)==1
@@ -97,5 +100,9 @@ class DoorMatcher:
         rows.sort(key=lambda r:r['score'],reverse=True)
         if not rows:return None
         best=rows[0];margin=best['score']-(rows[1]['score'] if len(rows)>1 else 0)
-        certain=best['score']>=60 and margin>=12
+        # A separate orange entrance is more reliable than an overlapping arrow.
+        # Accept a moderate terrain fit when it clearly beats alternatives.
+        minimum,minimum_margin=(50,10) if gate_visible else (60,12)
+        runner_score=rows[1]['score'] if len(rows)>1 else 0
+        certain=best['score']>=minimum and margin>=minimum_margin and best['score']>=runner_score*1.3
         return {'status':'matched' if certain else 'uncertain','method':'doors','candidates':rows[:5], 'doors':{'yellow':(cy/scale).tolist(),'blue':(cb/scale).tolist()}, 'reason':'已结合两门位置和可见地形匹配。' if certain else '已检测两门；起始房间仍可能重复，请继续探索。'}

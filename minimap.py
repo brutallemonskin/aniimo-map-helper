@@ -2,7 +2,7 @@
 
 Coordinates are image pixels. No keyboard input or game process access is used.
 """
-import json
+import json, copy
 from pathlib import Path
 from image_io import read_image
 import cv2
@@ -13,6 +13,7 @@ class MinimapTracker:
     def __init__(self, root):
         self.root=Path(root)
         self.refs={}
+        self.last_matches={}
 
     @staticmethod
     def extract(image):
@@ -58,6 +59,14 @@ class MinimapTracker:
         if not map_id:
             return dict(missing,reason='已看到小地图，请先打开大地图确认本局地图。')
         gray,mask,point,dungeon_color=sample
+        cached=self.last_matches.get(map_id)
+        if cached is not None and previous is not None:
+            old_gray,old_mask,old_point,old_previous,old_scale,answer=cached
+            row=answer['candidates'][0]
+            same_start=np.allclose(previous,old_previous,rtol=0,atol=.001) and previous_scale==old_scale
+            continuation=np.allclose(previous,row['position'],rtol=0,atol=.001) and previous_scale==row['minimap_scale']
+            if (same_start or continuation) and np.array_equal(gray,old_gray) and np.array_equal(mask,old_mask) and np.array_equal(point,old_point):
+                return copy.deepcopy(answer)
         # Transparent HUD backgrounds inherit colors from the 3D scene.
         # Reject by terrain fit below, not by how gray the whole circle is.
         if cv2.countNonZero(mask)<3500:
@@ -101,4 +110,6 @@ class MinimapTracker:
         origin=np.array(loc)/scale+[x0,y0]
         polygon=[(origin+np.array(p)/scale).tolist() for p in ((0,0),(200,0),(200,200),(0,200))]
         row={'id':map_id,'name':d['name'],'score':round(value*100,2),'inliers':0,'method':'minimap','position_source':'auto','position':pos.tolist(),'center':pos.tolist(),'polygon':polygon,'minimap_scale':scale}
-        return {'status':'matched','method':'minimap','position_source':'auto','candidates':[row], 'reason':'正在用小地图地形更新位置；打开大地图可重新校准。'}
+        answer={'status':'matched','method':'minimap','position_source':'auto','candidates':[row], 'reason':'正在用小地图地形更新位置；打开大地图可重新校准。'}
+        self.last_matches[map_id]=(gray.copy(),mask.copy(),point.copy(),list(previous),previous_scale,copy.deepcopy(answer))
+        return answer

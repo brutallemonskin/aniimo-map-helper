@@ -1,11 +1,23 @@
 /* Presentation-only localization: map IDs, coordinates and matching stay unchanged. */
 const I18N = (() => {
  const pairs = {
+ '地图预览 · 尚未确认':'Map preview · Unconfirmed',
+ '请选择要共享的游戏窗口':'Choose the game window to share',
+ '已授权，正在等待游戏画面':'Permission granted · Waiting for game frames',
+ '请切回游戏并保持窗口打开；收到画面后会自动开始识别。':'Return to the game and keep its window open. Recognition starts when frames arrive.',
+ '所选窗口的共享已经结束，请重新选择。':'The selected stream has ended. Choose the window again.',
+ '共享已取消或未获授权，请重新选择游戏窗口。':'Sharing was cancelled or not permitted. Choose the game window again.',
+ '画面播放失败：':'Video playback failed: ',
+ '已收到游戏画面，正在识别。':'Game frames received. Recognizing now.',
+ '画面暂时暂停，请切回游戏':'Capture paused · Return to the game',
+ '读取画面失败：':'Could not read the frame: ',
+ '已授权，但 12 秒内未收到游戏画面。请保持游戏窗口打开且不要最小化；仍无画面时，可在共享框中尝试“整个屏幕”。':'Permission granted, but no frames arrived within 12 seconds. Keep the game window open and not minimized. If needed, try sharing the entire screen.',
+
  '伊莫 · 地宫领航':'Aniimo · Map Navigator','地宫领航':'Map Navigator','准备识别…':'Preparing…','新一局':'New run','专注地图':'Focus map','显示控制台':'Show controls',
  '可缩放地宫地图':'Zoomable dungeon map','地宫地图':'Dungeon map','领航控制台':'Navigator controls','本地地图':'Local map','全图浏览':'Map overview','自动跟随所在分区':'Follow current region','全岛总览':'Island overview','当前分区':'Current region','放大地图':'Zoom in','缩小地图':'Zoom out','全岛':'Entire island','全图':'Fit map',
  '画面范围':'Visible area','角色位置':'Player position','滚轮缩放 · 拖动平移':'Scroll to zoom · Drag to pan','地图加载中':'Loading map','素材：Wikily /《伊莫》':'Maps: Wikily / Aniimo','探索领航':'Navigator','未连接画面':'Not connected','当前识别':'CURRENT MATCH','自动追踪黄色角色箭头':'Tracks the yellow player arrow','等待游戏画面':'Waiting for game capture',
  '选择游戏窗口并打开地图。请保留黄门、蓝门，迷雾无需裁掉。':'Select the game window and open its map. Keep both doors visible; no need to crop the fog.',
- '游戏画面':'Game capture','仅在本机处理':'Processed locally','选择游戏窗口':'Select game window','停止':'Stop','游戏悬浮窗':'Game overlay','关闭悬浮窗':'Close overlay','置顶半透明地图 · 识别地宫后同步显示':'Transparent overlay · Syncs after dungeon recognition','Alt+Shift+M 切换鼠标穿透 · Alt+Shift+H 隐藏/显示':'Alt+Shift+M: click-through · Alt+Shift+H: show/hide','等待连接游戏窗口':'Waiting for game window','也可直接 Ctrl+V 粘贴截图':'Or paste a screenshot with Ctrl+V','导入截图':'Import screenshot','立即识别':'Identify now','间隔越长，识别次数越少；笔记本可选 0.5 秒或 1 秒。':'Longer intervals reduce scan frequency. Try 0.5s or 1s on laptops.','识别间隔':'Scan interval','海岛模式':'Island mode','普通抢蛋':'Egg Heist','小队模式':'Team mode','地图点位':'Map markers','按需显示':'Choose what to show','地图在本地 · 探索由你决定':'Local maps · Explore your way',
+ '游戏画面':'Game capture','仅在本机处理':'Processed locally','选择游戏窗口':'Select game window','停止':'Stop','游戏悬浮窗':'Game overlay','关闭悬浮窗':'Close overlay','置顶半透明地图 · 识别地宫后同步显示':'Transparent overlay · Syncs after dungeon recognition','Alt+Shift+M 切换鼠标穿透 · Alt+Shift+H 隐藏/显示':'Alt+Shift+M: click-through · Alt+Shift+H: show/hide','等待连接游戏窗口':'Waiting for game window','也可直接 Ctrl+V 粘贴截图':'Or paste a screenshot with Ctrl+V','导入截图':'Import screenshot','立即识别':'Identify now','间隔越长，平均 CPU 占用通常越低，位置更新也越慢；低性能电脑可选 2 秒或 3 秒。':'Longer intervals usually reduce average CPU use but update your position less often. Try 2s or 3s on slower computers.','识别间隔':'Scan interval','海岛模式':'Island mode','普通抢蛋':'Egg Heist','小队模式':'Team mode','地图点位':'Map markers','按需显示':'Choose what to show','地图在本地 · 探索由你决定':'Local maps · Explore your way',
  '等待识别地宫':'Waiting for dungeon','保留上次位置':'Last known position','你的位置':'Your position','等待角色定位':'Locating player','悬浮窗同步失败':'Overlay sync failed','悬浮窗暂未同步，请检查本地服务。':'Overlay is not syncing. Check the local service.','悬浮窗未启动：':'Could not start overlay: ',
  '古代港口':'Ancient Port','东北岛区':'Northeast Island','北部岛区':'North Island','中央岛区':'Central Island','东南岛区':'Southeast Island','西南岛区':'Southwest Island','南部粉色岛区':'South Pink Island','分区地图':'Region map',
  '位置暂未更新':'Position not updated','位置保留':'Position held','画面暂时无法定位，按仍在原处显示。上次定位 ':'Cannot locate the player. Showing the last position from ',' 秒前；地图恢复后自动继续。':' seconds ago; tracking resumes when the map returns.',
@@ -23,7 +35,7 @@ const I18N = (() => {
  const sorted=Object.keys(pairs).sort((a,b)=>b.length-a.length);
  const pattern=new RegExp(sorted.map(s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),'g');
  let language='zh-CN';
- try { const saved=localStorage.getItem('aniimo-language'); language=saved==='en'?'en':saved==='zh-CN'?'zh-CN':navigator.language?.startsWith('zh')?'zh-CN':'en'; } catch {}
+ try { const saved=localStorage.getItem('aniimo-language'); language=saved==='en'?'en':'zh-CN'; } catch {}
  function t(value){
   if(language!=='en'||typeof value!=='string')return value;
   return value.replace(/每 ([\d.]+) 秒/g,'Every $1 s').replace(/(\d+) 张地图 · 本地识别就绪/g,'$1 maps · Ready').replace(/正在索引 (\d+) 张地图…/g,'Indexing $1 maps…').replace(/(\d+) 条点位/g,'$1 markers').replace(/ 已记录 (\d+) 个有变化的探索画面。/g,' $1 distinct exploration frames recorded.').replace(/两门＋地形 (\d+)分/g,'Doors + terrain: $1').replace(/(\d+) 个吻合特征/g,'$1 matching features').replace(/历史首选 (\d+) 次/g,'Top match in $1 frames').replace(/其余 (\d+) 个候选/g,'$1 more candidates').replace(pattern,key=>pairs[key]);

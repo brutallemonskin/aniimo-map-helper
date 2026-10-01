@@ -46,6 +46,9 @@ class Matcher:
             self.error = str(e)
 
     def match(self, im, anchor=None, tracking=None, outdoor_mode='egg-heist'):
+        # Uniform frames cannot contain map geometry; skip costly icon searches.
+        if float(np.max(cv2.meanStdDev(im)[1]))<1:
+            return {'status':'unknown','candidates':[], 'player':None,'position_source':None,'reason':'画面信息不足，请打开地图并扩大可见区域。'}
         sample=self.minimap.extract(im)
         if sample is not None:
             tracking=tracking or {}
