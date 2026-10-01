@@ -1,0 +1,559 @@
+{
+  "source": "Original artwork from Wikily, AniimoTools and the official Aniimo wiki; per-asset source URLs and checksums below.",
+  "categories": {
+    "egg-nests": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/05f22bf4-1792-45e1-aa7d-4b82451ab5d1-img_map_mark_grabegg_lair.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/sanctum-34",
+      "name": "蛋巢",
+      "file": "/data/icons/95ea407d9709.webp",
+      "sha256": "bc6ce7d2f67301230e0a188079bfb8f317334fbc2f765f255a2d0c2165af1f61"
+    },
+    "merchants": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-18/e166ea3a-2762-4b1d-a944-2c97a270c539-ui_icon_markpoint_captureballshop.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/sanctum-34",
+      "name": "商人",
+      "file": "/data/icons/37cf1b3a107a.webp",
+      "sha256": "3e32e1df7894211842c9fd31d7234921813295f80eb9be61c835b55a93f39bd2"
+    },
+    "aniimo": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/b45ea30a-c849-4c08-a7e1-f2b3884af63e-ui_icon_markpoint_mythicalanimals.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/sanctum-34",
+      "name": "伊莫",
+      "file": "/data/icons/71067aac18a9.webp",
+      "sha256": "e6c9a50fd7000073d215ba84ae096950c7ec7bf33aa24d2b08e8d925043474d3"
+    },
+    "chests-legendary": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/e5d6104b-5320-4e41-8fe1-985e36b2da2b-ui_icon_markpoint_chest.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/sanctum-34",
+      "name": "金色宝箱",
+      "file": "/data/icons/142526bf6d00.webp",
+      "sha256": "b71be45e20e4fc8c76b257ccea51b531712c9d06bb79c49166a6807b59c5662a"
+    },
+    "chests-epic": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/e5d6104b-5320-4e41-8fe1-985e36b2da2b-ui_icon_markpoint_chest.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/sanctum-34",
+      "name": "紫色宝箱",
+      "file": "/data/icons/142526bf6d00.webp",
+      "sha256": "b71be45e20e4fc8c76b257ccea51b531712c9d06bb79c49166a6807b59c5662a"
+    },
+    "chests-rare": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/e5d6104b-5320-4e41-8fe1-985e36b2da2b-ui_icon_markpoint_chest.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/sanctum-34",
+      "name": "蓝色宝箱",
+      "file": "/data/icons/142526bf6d00.webp",
+      "sha256": "b71be45e20e4fc8c76b257ccea51b531712c9d06bb79c49166a6807b59c5662a"
+    },
+    "chests-uncommon": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/e5d6104b-5320-4e41-8fe1-985e36b2da2b-ui_icon_markpoint_chest.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/sanctum-34",
+      "name": "绿色宝箱",
+      "file": "/data/icons/142526bf6d00.webp",
+      "sha256": "b71be45e20e4fc8c76b257ccea51b531712c9d06bb79c49166a6807b59c5662a"
+    },
+    "teleporters": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/051b1ff4-fe53-4581-ac65-ec61498fca5e-img_map_mark_grabegg_transmitter_active.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/egg-heist",
+      "name": "传送器",
+      "file": "/data/icons/76e54419740c.webp",
+      "sha256": "e0af8eea4dc3730b1ec9eefb35fa7005ab03bc5e9e3457f247995afbaa79d73f"
+    },
+    "extraction": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/9f0818cf-5da2-4f98-b9c3-bc38079cd72e-img_map_mark_grabegg_extraction.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/egg-heist",
+      "name": "撤离传送阵",
+      "file": "/data/icons/d22c145ac350.webp",
+      "sha256": "e9e8e33946a80a98640567d49bfa4b6695782317d8a8bee9f6e462a4bb6d5ab7"
+    },
+    "giant-egg": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/cadf416d-2ad8-444a-b472-a43b597a459b-img_map_mark_grabegg_hugeegg_heggshine.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/egg-heist",
+      "name": "极巨黯虹蛋",
+      "file": "/data/icons/5859f8149869.webp",
+      "sha256": "bb88bfa5ade79a7ccbf3f62ffd738f05ecb74158530e5d171178baeb086fb45f"
+    },
+    "coin-monsters": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/c4cc91e8-d8f1-47ed-b8e0-8aaebab5623d-img_map_mark_grabegg_poi_double_monster.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/egg-heist",
+      "name": "金币怪出没",
+      "file": "/data/icons/e809a83f987c.webp",
+      "sha256": "36c6ebdfade7b1a2e99592e26fe06eedba6164b3cdc8a20d761f8f0d50cb685f"
+    },
+    "egg-boats": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/0af882d2-b79a-43f0-a7b1-dffd1c0b7adb-img_map_mark_grabegg_eggboat.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/egg-heist",
+      "name": "蛋船",
+      "file": "/data/icons/9a84fb851b88.webp",
+      "sha256": "e3f835508dd4c9c874521fe9746d034f44bae5450a80fae3984e273750b06ebb"
+    },
+    "rare-chests": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/809a1b75-2195-46d0-ae18-8d49fe44596d-ui_icon_markpoint_treasurechest.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/egg-heist",
+      "name": "蓝色宝箱",
+      "file": "/data/icons/4e231d9f5c79.webp",
+      "sha256": "1548dd5ec1e5dab17faab9bf6d073e4cc74f166f3ffcea694aaedfcf0336318e"
+    },
+    "chests": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/e5d6104b-5320-4e41-8fe1-985e36b2da2b-ui_icon_markpoint_chest.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/egg-heist",
+      "name": "宝箱",
+      "file": "/data/icons/142526bf6d00.webp",
+      "sha256": "b71be45e20e4fc8c76b257ccea51b531712c9d06bb79c49166a6807b59c5662a"
+    },
+    "collectibles": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/57ca2c10-8dae-4723-8b3b-9a5449c30654-ui_icon_markpoint_leyline_flower.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/egg-heist",
+      "name": "可收集物",
+      "file": "/data/icons/94eef2370f56.webp",
+      "sha256": "4a512df13e7e3cd29815c8ba6355d1c2d764ae613d4df4afa2311a88ace552fc"
+    },
+    "aniimo-spawns": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/b45ea30a-c849-4c08-a7e1-f2b3884af63e-ui_icon_markpoint_mythicalanimals.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/egg-heist",
+      "name": "伊莫出生点",
+      "file": "/data/icons/71067aac18a9.webp",
+      "sha256": "e6c9a50fd7000073d215ba84ae096950c7ec7bf33aa24d2b08e8d925043474d3"
+    },
+    "entrance": {
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-16/9384c768-b83c-4e22-8b88-12a2bad76ae4-img_map_mark_uderground_front_door.webp",
+      "page": "https://wikily.gg/zh-cn/aniimo/sanctum-34",
+      "name": "入口",
+      "file": "/data/icons/88283228aef0.webp",
+      "sha256": "07945afa96cf89efbec8759afabbd9b240bd0acc4f01777ec1525003262876e5",
+      "note": "Original front-door artwork; mapped to yellow entrance after visual verification."
+    },
+    "side-entrance": {
+      "file": "/data/icons/door-side-game.webp",
+      "source": "https://aniimotools.dev/assets/lost-sanctum/marks/door-side.webp",
+      "page": "https://aniimotools.dev/map/lost-sanctum/",
+      "name": "蓝门（地宫侧门）",
+      "sha256": "2b0352c81b037aa85b4123338320ae8b9e0c2b49c1cb4aecc3ee2563f0ace5af",
+      "note": "Unmodified map marker artwork as supplied on the source site; not AI-generated."
+    },
+    "key-rooms-gold": {
+      "file": "/data/icons/key-gold-game.webp",
+      "source": "https://aniimotools.dev/assets/lost-sanctum/marks/key-gold.webp",
+      "page": "https://aniimotools.dev/map/lost-sanctum/",
+      "name": "金钥匙房",
+      "sha256": "e34d4a982930ebca6790af958012f261f546e90106eb85e1e29d234572957ec5",
+      "note": "Unmodified map marker artwork as supplied on the source site; not AI-generated."
+    },
+    "key-rooms-purple": {
+      "file": "/data/icons/key-purple-game.webp",
+      "source": "https://aniimotools.dev/assets/lost-sanctum/marks/key-purple.webp",
+      "page": "https://aniimotools.dev/map/lost-sanctum/",
+      "name": "紫钥匙房",
+      "sha256": "2883113339ba119e02fa5b40d70b76b2c807512421c8918e9f14912ed225fd94",
+      "note": "Unmodified map marker artwork as supplied on the source site; not AI-generated."
+    },
+    "key-rooms-blue": {
+      "file": "/data/icons/key-blue-game.webp",
+      "source": "https://aniimotools.dev/assets/lost-sanctum/marks/key-blue.webp",
+      "page": "https://aniimotools.dev/map/lost-sanctum/",
+      "name": "蓝钥匙房",
+      "sha256": "d76780edd42034ee94b839747a7391695f196bc59d79ee66ff659e489cff0228",
+      "note": "Unmodified map marker artwork as supplied on the source site; not AI-generated."
+    }
+  },
+  "creatures": {
+    "幽黯云朵羊": {
+      "file": "/data/icons/4994391e97ee.png",
+      "sha256": "66942e011ab3a324554fa6b3e50783d743e4787ffc2f67c95e4134e3705c12f6",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/38ea0b50-a807-4b40-aeeb-8b47546e36d3-wiki_aniimo_10261.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/nimbi",
+      "species": "云朵羊",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯冰刃狼": {
+      "file": "/data/icons/dfe252f67d0c.png",
+      "sha256": "abef8f3f76668dbdbafa0ae3c8adaa1452b0f0ee9ee74d645e28d16827b6c687",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/57d94cd8-2894-49e1-8dfc-84c8c16c5fb3-wiki_aniimo_10132.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/fenrier",
+      "species": "冰刃狼",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯刺剑玫": {
+      "file": "/data/icons/84e60a3f66de.png",
+      "sha256": "c5ddbc5b662acd1772d12c25168f33058c6c390437fa360205934037e2d7f5cf",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/91bcdfc5-8d06-4d7c-81b7-c762ab541853-wiki_aniimo_10323.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/thornblade",
+      "species": "刺剑玫",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯吊灯水母": {
+      "file": "/data/icons/79bd1ad167cb.png",
+      "sha256": "3757e1fcfa8d1d0d1020cdb31a379598ed7753e5ff94bce6640c519337f7aec0",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/2e843730-3a8b-4238-911f-a2c7ad432adc-wiki_aniimo_10143.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/luminelle",
+      "species": "吊灯水母",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯土堡蚁": {
+      "file": "/data/icons/2171bbd97e59.png",
+      "sha256": "f5e721fd051853a2782443427bdf06f7d6e555bc8de0700e320429d62ae25752",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/60be3eac-6875-4c21-b5b8-19e6e73c7fa8-wiki_aniimo_10433.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/bailite",
+      "species": "土堡蚁",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯埋埋": {
+      "file": "/data/icons/e5446840d6f1.png",
+      "sha256": "2ef80508d2481c088c4c87560b1f9b4568fce1605832f7bf42ad5eb29279cca8",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/d262942e-54ee-4bc4-b07c-c2c132758ff2-wiki_aniimo_10207.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/tuckin",
+      "species": "埋埋",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯大号鸥": {
+      "file": "/data/icons/5f9ce11d8c81.png",
+      "sha256": "e07513b8b884f3d202c5e7a1a4ccf0f3ffc65f5007c948c5eb6f6bef3bb3e751",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/9c3d0310-42c2-4953-8ab6-4531d790d2c1-wiki_aniimo_10187.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/tubster",
+      "species": "大号鸥",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯大眼盔": {
+      "file": "/data/icons/8f9776cc8593.png",
+      "sha256": "22b656abf7ab32da650953caf42618f0710c9be42125df4d8fe81931cf188a25",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/2956561f-3256-4ade-bbee-d8c656e00029-wiki_aniimo_10021.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/helmut",
+      "species": "大眼盔",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯小号鸥": {
+      "file": "/data/icons/909daeddac19.png",
+      "sha256": "fb801f900f637679c78c22800e8a1455811bcb1867a44457f927074ceae51481",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/ed13cfaa-2a4c-4b6b-bb07-04f91486c87b-wiki_aniimo_10185.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/cornet",
+      "species": "小号鸥",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯小哭苞": {
+      "file": "/data/icons/903de297cc12.png",
+      "sha256": "a046b0821c38265a6b298d7923da64551054dcef61e5f1ca5b8aeadb40bcd1d6",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/6ca6c067-b605-4c33-8904-127af1255212-wiki_aniimo_10321.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/budsquire",
+      "species": "小哭苞",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯小炭犬": {
+      "file": "/data/icons/c23b1e09b1bd.png",
+      "sha256": "447aae90cbe3efb1aff31301faa05b0c00464397c5fc295b215c32bcc5cea3e7",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/dc2dec5d-01b2-4cee-8a30-ae76412ae12a-wiki_aniimo_10051.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/emberpup",
+      "species": "小炭犬",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯巫帽草": {
+      "file": "/data/icons/f5a868340d22.png",
+      "sha256": "d24e86ce60cdcd34bc72ff6f31ff916033d1c62cf5779898281724191ec70090",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/95b27b8c-a2fd-49a4-b8f1-e3cae7d40166-wiki_aniimo_10203.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/witchin",
+      "species": "巫帽草",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯幻焰灵": {
+      "file": "/data/icons/c1179f63d0ca.png",
+      "sha256": "369ef167cfc6aeadabeecb7ca29de1034a00fc66b450ec8fe1fb20e3183f8e59",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/3cd6d218-1c3c-4783-b443-afe5a45fd61d-wiki_aniimo_10333.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/flamerion",
+      "species": "幻焰灵",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯幻翼蝶": {
+      "file": "/data/icons/b406f9758b0c.png",
+      "sha256": "c518c94dabdd1c28b73659864dddeb62161e41cc116df3cfb172a93b9e57d6c8",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/4e693c45-13e7-46ea-9c03-0fcd374a8397-wiki_aniimo_10232.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/gracewing",
+      "species": "幻翼蝶",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯幽幽焰": {
+      "file": "/data/icons/dcd9bb40480e.png",
+      "sha256": "7ec7c8e576dfb4de9610d3383e6bf6fa3a9dee51b1a4b8df77df3127a3de67fd",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/f43cf5d3-3ee5-474d-bbd1-032bcafdca14-wiki_aniimo_10331.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/sparki",
+      "species": "幽幽焰",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯幽爪镰": {
+      "file": "/data/icons/5623dea84982.png",
+      "sha256": "a7680c2671414e0463b3a58ba2b7c57f64652e6e1232ac4bfade61fa77015f1d",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/65dc26a6-9746-46ae-af72-e3e893f2d641-wiki_aniimo_10031.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/wisptis",
+      "species": "幽爪镰",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯星乐蒂": {
+      "file": "/data/icons/9aad1c57cef6.png",
+      "sha256": "a83a986c24576266e1b4aa8960a41be4917b1f7973161471e91c9202299d4a45",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/18f4f946-e7d6-45ea-9cca-4d7bd4eb4de2-wiki_aniimo_10011.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/celestis",
+      "species": "星乐蒂",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯星骑士": {
+      "file": "/data/icons/2286b85297c5.png",
+      "sha256": "2cb938ad107685e465c332c28e1e152fcd3dd1b44df31e2fe736e75400000b58",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/a4aca64f-e4bf-4583-8916-60ac943804a6-wiki_aniimo_10194.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/sherro",
+      "species": "星骑士",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯星魔师": {
+      "file": "/data/icons/81c264b13943.png",
+      "sha256": "b039fe7a65756f60c4bd61980d1827db20b27d6f6ae7e55fb93b25704f214442",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/622153a4-35e3-4933-8c82-c6ff2357c86a-wiki_aniimo_10012.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/stellarys",
+      "species": "星魔师",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯星魔师首领": {
+      "file": "/data/icons/81c264b13943.png",
+      "sha256": "b039fe7a65756f60c4bd61980d1827db20b27d6f6ae7e55fb93b25704f214442",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/622153a4-35e3-4933-8c82-c6ff2357c86a-wiki_aniimo_10012.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/stellarys",
+      "species": "星魔师",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯晶背龙": {
+      "file": "/data/icons/7f77927e89f0.png",
+      "sha256": "089f4f7c3d4067079c8c0967988f0261748fec2115513f465e6a0e36cc680814",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/10116196-b7b8-4cc0-bb87-fe4451d16aff-wiki_aniimo_10284.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/geodeback",
+      "species": "晶背龙",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯暴睡熊": {
+      "file": "/data/icons/c77ac145bff0.png",
+      "sha256": "b6dab5559031fbafc83285caccf0756e4daaca8a404061cabb5fe66c246184a4",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/efba2ea5-7333-45e5-a69e-2c5fa52c763c-wiki_aniimo_10503.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/grizbo",
+      "species": "暴睡熊",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯泡泡獭": {
+      "file": "/data/icons/a9dc19959d38.png",
+      "sha256": "192e5093914c20b4964cc584fbf8d7919c9a149e3e5dd13d2b9bcebea66930c0",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/2d29e096-5964-4fdc-9f80-d81bebe77ce9-wiki_aniimo_10172.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/popota",
+      "species": "泡泡獭",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯淬刃螳螂": {
+      "file": "/data/icons/5b7f86048ec2.png",
+      "sha256": "414ab76b7948befd74aa46ede84daa022b3f1f42e67e5fa659eb78011e809187",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/6b3e3863-7d84-405c-bd5b-1fac7be721fc-wiki_aniimo_10032.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/ignitis",
+      "species": "淬刃螳螂",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯滚滚郎": {
+      "file": "/data/icons/c7c8c39a278e.png",
+      "sha256": "13d767b7bb40cfef65537dada3dae78fe3d1f8ddf70a4c28ccf4cba3c35a47d9",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/d3296305-01e4-4c14-baa9-6e6abb2000db-wiki_aniimo_10451.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/baleetle",
+      "species": "滚滚郎",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯漂漂獭": {
+      "file": "/data/icons/17cc8d83695e.png",
+      "sha256": "3e0814ac13acb5d3a591b8ae392c790ef92ab7f58fc90baa2ca5b2275c86b34f",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/e8b659a3-245c-4bea-8443-99198669f60f-wiki_aniimo_10173.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/piopiota",
+      "species": "漂漂獭",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯灯泡水母": {
+      "file": "/data/icons/0cadbed822c1.png",
+      "sha256": "f900abc6a773434b6ec2c8d970c9eec73f670820c2e5f8d60e04ca267ee7d6b7",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/1c8b5c16-a380-430d-8aee-ab73a325e4b4-wiki_aniimo_10141.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/bulbly",
+      "species": "灯泡水母",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯灯纱水母": {
+      "file": "/data/icons/956a879b48cd.png",
+      "sha256": "056da4d0d6350cf4a63d191a03f7b9db25ec53d9a5dbd4c5b719b1e7741041af",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/3b6781b0-6917-4f01-bcdd-100a9cc68804-wiki_aniimo_10142.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/veilfloat",
+      "species": "灯纱水母",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯焚火狼": {
+      "file": "/data/icons/1d4eaa852ea6.png",
+      "sha256": "83ca2580f0f723b1e3e262b4e5fc6d54c35759198d075917287470d71fe0e551",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/3bb304ff-d3bc-48eb-9c71-b7a81a173391-wiki_aniimo_10052.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/flameruff",
+      "species": "焚火狼",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯狼斗士": {
+      "file": "/data/icons/70ea1cf56079.png",
+      "sha256": "c9e0e2e914f510105749907cf0734bd81210666a5347d1a8323e8480d761e13f",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/f13fec10-b247-4f77-b666-92c762434728-wiki_aniimo_10053.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/scorchhowl",
+      "species": "狼斗士",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯盔勇士": {
+      "file": "/data/icons/1465c981c213.png",
+      "sha256": "1efdd817975648b9fd5e3f610c2ea5e3497a139469fc2261b84a8b6830e4e05c",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/600c893a-1f89-44ac-8e70-38470c5edee3-wiki_aniimo_10026.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/pawney",
+      "species": "盔勇士",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯盔卫士": {
+      "file": "/data/icons/8977d2fd51e3.png",
+      "sha256": "44f6357fdcec05689bea819424f55df6c3276599bd3373c6fb83269c3cd661ea",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/1d4ff009-8b1b-4575-8a13-67411fdba143-wiki_aniimo_10027.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/rookey",
+      "species": "盔卫士",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯簇晶脊龙": {
+      "file": "/data/icons/be08406cc613.png",
+      "sha256": "34389f21a4bc2cd7b1fc6fb1dd5c74131e4cd5cfcfc94212234438a16acf371c",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/b093032c-6fb2-42fc-96ec-f2379bfb5d80-wiki_aniimo_10285.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/minespine",
+      "species": "簇晶脊龙",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯胖胖獭": {
+      "file": "/data/icons/9f90243c1466.png",
+      "sha256": "54850049a00cc30c97782638d7d2c1d380ff2da7cd0491de712d29dd886a7ec7",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/f34c32c6-9310-4f6d-b83c-239fcdeaa343-wiki_aniimo_10174.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/panpanta",
+      "species": "胖胖獭",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯花舞兰": {
+      "file": "/data/icons/7f158c15c70e.png",
+      "sha256": "b289c2f62060f8a30ad0e49c1aa8e0a82d2d4d97eb413479b5a64b449c02cefa",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/91207f46-5313-4fda-97dd-298d9e0dbbce-wiki_aniimo_10212.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/irisal",
+      "species": "花舞兰",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯花芽蟹": {
+      "file": "/data/icons/1738c600e48d.png",
+      "sha256": "35e627d5553eb6a6bfe63e47203a133b393927f02dec72991d0ffba83e8a3237",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/1b970614-7367-4624-b38b-dc7630cbfdf8-wiki_aniimo_10161.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/budclaw",
+      "species": "花芽蟹",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯莲冠龙": {
+      "file": "/data/icons/ef43e9a470f7.png",
+      "sha256": "4dc58fd369beaedf33dd3714f12cec63062c87380a1c69deb4bee765713e3250",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/2130abf6-dc7f-4c42-8341-e147264feecf-wiki_aniimo_10045.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/leafy",
+      "species": "莲冠龙",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯莲顶鱼": {
+      "file": "/data/icons/8a65d7c5dd91.png",
+      "sha256": "df475ae9db03eeda63a827a50021ce93386de1adf5c091897ba0010a0efc46f7",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/56d1b8c7-a737-4dee-bd03-bc4057835d75-wiki_aniimo_10041.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/skippy",
+      "species": "莲顶鱼",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯莹冰龙": {
+      "file": "/data/icons/ed6f3598996e.png",
+      "sha256": "f037b8d07ba9ae28d19e56a9eadb88ff338bd239d4acf53188f8a6a8ea352ac2",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/83e88b1a-1e24-46ad-b9e0-e6e91d9da37d-wiki_aniimo_10043.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/glacy",
+      "species": "莹冰龙",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯蓬蓬羊": {
+      "file": "/data/icons/fde84557c7a4.png",
+      "sha256": "e5f112448d3052cf35ca7a1f0d5ceb27595667663185add271987c0aeb79b5f8",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/79dd530e-678d-4696-8110-ab19c3779bf4-wiki_aniimo_10262.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/turbo",
+      "species": "蓬蓬羊",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯蟹葱葱": {
+      "file": "/data/icons/398749ecc6e7.png",
+      "sha256": "abc0ea78245f20c5e4bbb76c1a60b98c8b3c9169a6d47d9a684118ba2bea3fdb",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/b96adfb1-4e59-4925-b1e3-c28f9ace93f8-wiki_aniimo_10162.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/shrubclaw",
+      "species": "蟹葱葱",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯走调草": {
+      "file": "/data/icons/d272972c4aae.png",
+      "sha256": "d6ac0aaaf05d7010f8e736365f16d5aa7131df04d99a31232dd33c70f89d9c4b",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/c2f83f58-5ee3-47c7-b4ff-16209b22d350-wiki_aniimo_10201.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/hummin",
+      "species": "走调草",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯迷梦崽": {
+      "file": "/data/icons/85d4e12fd80e.png",
+      "sha256": "264a63cb58ad11d2412912fa35b0f47acd0ee15ae7bb05b2c71d26f915fab559",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/bc4a5917-1cf1-4142-8a79-39c4acbe23c3-wiki_aniimo_10501.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/cubbo",
+      "species": "迷梦崽",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯长号鸥": {
+      "file": "/data/icons/27c1cb61beff.png",
+      "sha256": "cfcec3c6775aa1ad51a47996459bde7267b55735dbb2693241f9cd4dc4a48f71",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/bb7cd4e4-0f33-4fd0-b7f7-7d2236f86d2a-wiki_aniimo_10184.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/tromber",
+      "species": "长号鸥",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯雷光貂": {
+      "file": "/data/icons/96ed2fa1fb58.png",
+      "sha256": "5c20c607026104c3374ac95e47cff4c455c05b2bbecfe6ead9883c90e933c681",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/f86cf340-0b4b-43b7-bc37-9b3d0ec445cd-wiki_aniimo_10222.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/blazen",
+      "species": "雷光貂",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯顽皮鱼": {
+      "file": "/data/icons/fe5cada52134.png",
+      "sha256": "9fc4873a4fd25e681bae0da84b5b89e998b3d1435cf4d9f45b341d8462e65edb",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/82b15da1-8af4-4cf1-bd2d-4551e38d9d18-wiki_aniimo_10042.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/pranky",
+      "species": "顽皮鱼",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯飘飘花": {
+      "file": "/data/icons/c99ef19f1737.png",
+      "sha256": "6cb1140bce0cdafa4ef1603d92cc3ccad6c0846044ce9e52971ecc9f966ed919",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/8a15e53c-68fa-4a13-ba08-83917d1d344d-wiki_aniimo_10211.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/iris",
+      "species": "飘飘花",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯香氛鸟": {
+      "file": "/data/icons/b3f1f161c723.png",
+      "sha256": "23b7c02161d55fa551ad8efaa9e70cb62f4bb823f1d59a60fbe7ecd2e4affc70",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/2acb32ad-b142-4d84-9f5b-888028bbc745-wiki_aniimo_10352.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/fragrancier",
+      "species": "香氛鸟",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯魅乐薇": {
+      "file": "/data/icons/6c6f3c8e7b25.png",
+      "sha256": "f78214c6a797323f12e56f10def924896769fe69ab7a667b50cdbb80f4850650",
+      "source": "https://media.wikily.gg/fc1b16f5-2224-477c-9f91-4edece80fb3f/2026-09-14/0f54eb0e-91a8-44c4-b37c-eace0c64c404-wiki_aniimo_10324.png",
+      "page": "https://wikily.gg/zh-cn/aniimo/aniilog/melloblum",
+      "species": "魅乐薇",
+      "note": "Original base-form species artwork; not a depiction of the dark variant."
+    },
+    "幽黯碎岩仔": {
+      "file": "/data/icons/official-rockling.png",
+      "source": "https://kg-web-cdn.kingsgroup.cn/official-website/worldx/wiki_stage/init/Wiki_Aniimo_10281.png",
+      "page": "https://wiki.yimo.com/item/070/basic-form",
+      "species": "碎岩仔",
+      "sha256": "7a519f551da2230eb04464b7499637b822075d37412e33a5c9b9b4b8112133f6",
+      "note": "Official base-form species artwork; not a depiction of the dark variant."
+    }
+  }
+}

@@ -1,6 +1,36 @@
 /* Presentation-only localization: map IDs, coordinates and matching stay unchanged. */
 const I18N = (() => {
  const pairs = {
+ '大地图位置已更新 · 实时定位已关闭':'Full-map position updated · Live tracking off',
+ '实时定位':'Live tracking','70% · 较小':'70% · Smaller','85% · 默认':'85% · Default','125% · 更大':'125% · Larger',
+ '关闭可降低持续计算：保留位置，只检查大地图（最快每秒一次），暂停小地图追踪和彩虹掉落标记。重新开启后请打开大地图校准。选择自动保存。':'Turn off to reduce ongoing processing: keep the last position and check only for the full map, at most once per second. Minimap tracking and loot marking pause. Reopen the full map to recalibrate after enabling. Your choice is saved.',
+ '实时定位已关闭 · 仅识别大地图':'Live tracking off · Full map only',
+ '当前位置已保留。打开大地图仍可识别地图和位置；彩虹掉落自动标记暂停。':'Last position retained. Full-map recognition remains available; automatic loot marking is paused.',
+ '实时定位关闭，自动掉落标记暂停':'Live tracking off · Loot marking paused',
+ '实时定位已开启 · 请打开大地图校准':'Live tracking on · Open the full map to calibrate',
+ '请重新打开大地图确认当前位置，再继续小地图追踪。':'Reopen the full map to confirm your position before resuming minimap tracking.',
+ '实时定位已关闭；打开大地图仍可识别地图和位置。':'Live tracking is off; open the full map to identify your map and position.',
+ '无效实时定位选项':'Invalid live-tracking option',
+
+ '图标大小':'Icon size','50% · 更小':'50% · Smallest','70% · 默认':'70% · Default','85% · 适中':'85% · Medium','100% · 原大小':'100% · Original',
+ '网页与悬浮窗同步，选择自动保存。':'Applies to the web map and overlay. Your choice is saved.',
+
+"彩虹掉落提示":"Rainbow loot hints",
+"试用":"Experimental",
+"自动标记疑似光柱":"Mark suspected loot beams automatically",
+"等待光柱出现":"Watching for loot beams",
+"看到疑似光柱，等待当前位置确认":"Suspected beam seen; waiting for a fresh player position",
+"此处已记录，靠近后请自行核对":"Discovery recorded; approach to verify",
+"看到疑似光柱，正在连续确认":"Suspected beam seen; confirming across frames",
+"已标记发现位置附近 · 非精确坐标":"Discovery vicinity marked · Approximate location",
+"当前地图暂无记录":"No discoveries on this map",
+"疑似彩虹·附近":"Possible rainbow · Nearby",
+"移除":"Remove",
+"已拾取或误报时移除":"Remove collected loot or false detections",
+"自动标记已暂停":"Automatic marking paused",
+"清空本局掉落标记":"Clear this run’s loot markers",
+"记录发现时玩家位置附近，非物品精确坐标。可能误报；拾取后请手动移除。新一局自动清空。":"Records the player’s discovery location, not exact loot coordinates. False detections are possible; remove collected loot manually. New run clears all markers.",
+
  '地图预览 · 尚未确认':'Map preview · Unconfirmed',
  '请选择要共享的游戏窗口':'Choose the game window to share',
  '已授权，正在等待游戏画面':'Permission granted · Waiting for game frames',
@@ -15,7 +45,7 @@ const I18N = (() => {
 
  '伊莫 · 地宫领航':'Aniimo · Map Navigator','地宫领航':'Map Navigator','准备识别…':'Preparing…','新一局':'New run','专注地图':'Focus map','显示控制台':'Show controls',
  '可缩放地宫地图':'Zoomable dungeon map','地宫地图':'Dungeon map','领航控制台':'Navigator controls','本地地图':'Local map','全图浏览':'Map overview','自动跟随所在分区':'Follow current region','全岛总览':'Island overview','当前分区':'Current region','放大地图':'Zoom in','缩小地图':'Zoom out','全岛':'Entire island','全图':'Fit map',
- '画面范围':'Visible area','角色位置':'Player position','滚轮缩放 · 拖动平移':'Scroll to zoom · Drag to pan','地图加载中':'Loading map','素材：Wikily /《伊莫》':'Maps: Wikily / Aniimo','探索领航':'Navigator','未连接画面':'Not connected','当前识别':'CURRENT MATCH','自动追踪黄色角色箭头':'Tracks the yellow player arrow','等待游戏画面':'Waiting for game capture',
+ '画面范围':'Visible area','角色位置':'Player position','滚轮缩放 · 拖动平移':'Scroll to zoom · Drag to pan','地图加载中':'Loading map','素材：伊莫 / Wikily / AniimoTools / 官方图鉴':'Art: Aniimo / Wikily / AniimoTools / Official wiki','探索领航':'Navigator','未连接画面':'Not connected','当前识别':'CURRENT MATCH','自动追踪黄色角色箭头':'Tracks the yellow player arrow','等待游戏画面':'Waiting for game capture',
  '选择游戏窗口并打开地图。请保留黄门、蓝门，迷雾无需裁掉。':'Select the game window and open its map. Keep both doors visible; no need to crop the fog.',
  '游戏画面':'Game capture','仅在本机处理':'Processed locally','选择游戏窗口':'Select game window','停止':'Stop','游戏悬浮窗':'Game overlay','关闭悬浮窗':'Close overlay','置顶半透明地图 · 识别地宫后同步显示':'Transparent overlay · Syncs after dungeon recognition','Alt+Shift+M 切换鼠标穿透 · Alt+Shift+H 隐藏/显示':'Alt+Shift+M: click-through · Alt+Shift+H: show/hide','等待连接游戏窗口':'Waiting for game window','也可直接 Ctrl+V 粘贴截图':'Or paste a screenshot with Ctrl+V','导入截图':'Import screenshot','立即识别':'Identify now','间隔越长，平均 CPU 占用通常越低，位置更新也越慢；低性能电脑可选 2 秒或 3 秒。':'Longer intervals usually reduce average CPU use but update your position less often. Try 2s or 3s on slower computers.','识别间隔':'Scan interval','海岛模式':'Island mode','普通抢蛋':'Egg Heist','小队模式':'Team mode','地图点位':'Map markers','按需显示':'Choose what to show','地图在本地 · 探索由你决定':'Local maps · Explore your way',
  '等待识别地宫':'Waiting for dungeon','保留上次位置':'Last known position','你的位置':'Your position','等待角色定位':'Locating player','悬浮窗同步失败':'Overlay sync failed','悬浮窗暂未同步，请检查本地服务。':'Overlay is not syncing. Check the local service.','悬浮窗未启动：':'Could not start overlay: ',

@@ -4,6 +4,18 @@ import cv2
 import numpy as np
 
 
+def normalize_map_lighting(image):
+    """Restore dim capture whites without changing already-bright frames.
+
+    Use a bounded global gain, preserving hues, geometry and pixel coordinates.
+    This is not HDR decoding; it only compensates for uniformly dim captures.
+    """
+    whites=float(np.percentile(image[::4,::4].max(axis=2),99.9))
+    if not 100<=whites<225:return image
+    lut=np.clip(np.arange(256)*255/whites,0,255).astype(np.uint8)
+    return cv2.LUT(image,lut)
+
+
 def read_image(path, flags=cv2.IMREAD_COLOR):
     path = Path(path)
     try:

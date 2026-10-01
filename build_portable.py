@@ -8,16 +8,20 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parent
 SOURCE_RUNTIME=Path(sys.executable).parent
-OUTPUT=ROOT/'portable'/'AniimoNavigator-Portable-v0.3.6'
+OUTPUT=ROOT/'portable'/'AniimoNavigator-Portable-v0.3.8'
 if OUTPUT.exists(): raise SystemExit('Output exists; choose a new version before rebuilding.')
 APP=OUTPUT/'app'; RUNTIME=OUTPUT/'runtime'
 APP.mkdir(parents=True); (RUNTIME/'Lib/site-packages').mkdir(parents=True)
-for name in ('server.py','image_io.py','matcher.py','door_matcher.py','player.py','minimap.py','overlay_bridge.py','overlay_window.py','index.html','app.js','i18n.js','style.css'):
+for name in ('server.py','image_io.py','matcher.py','loot_detector.py','door_matcher.py','player.py','minimap.py','overlay_bridge.py','overlay_window.py','index.html','app.js','i18n.js','style.css'):
     shutil.copy2(ROOT/name,APP/name)
 (APP/'data').mkdir()
 catalog=json.loads((ROOT/'data/catalog.json').read_text(encoding='utf-8'))
 for name in ['catalog.json','player-egg-template.png']+[m['id']+ext for m in catalog for ext in ('.json','.webp')]:
     shutil.copy2(ROOT/'data'/name,APP/'data'/name)
+(APP/'data/icons').mkdir()
+icon_manifest=json.loads((ROOT/'data/icons/manifest.json').read_text(encoding='utf8'))
+for name in {'manifest.json'}|{Path(v['file']).name for v in [*icon_manifest['categories'].values(),*icon_manifest.get('creatures',{}).values()]}:
+    shutil.copy2(ROOT/'data/icons'/name,APP/'data/icons'/name)
 for file in SOURCE_RUNTIME.iterdir():
     if file.is_file() and (file.suffix.lower() in ('.exe','.dll','.pyd','.zip','.cat') or file.name=='LICENSE.txt'):
         shutil.copy2(file,RUNTIME/file.name)
@@ -29,7 +33,7 @@ for item in packages.iterdir():
 compiler=Path('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe')
 for output,defines in [('启动助手.exe',[]),('退出助手.exe',['/define:STOP'])]:
     subprocess.run([str(compiler),'/nologo','/target:winexe','/reference:System.Windows.Forms.dll','/out:'+str(OUTPUT/output),*defines,str(ROOT/'portable_launcher.cs')],check=True)
-(OUTPUT/'使用说明.txt').write_text('''伊莫 · 地宫领航 便携版 v0.3.6（Windows 10/11 x64）
+(OUTPUT/'使用说明.txt').write_text('''伊莫 · 地宫领航 便携版 v0.3.8（Windows 10/11 x64）
 
 首次打开默认中文。可在右上角切换 English，手动选择的语言偏好自动保存。
 
@@ -41,8 +45,12 @@ for output,defines in [('启动助手.exe',[]),('退出助手.exe',['/define:STO
 6. 拖动悬浮窗标题栏移动，拖动边缘或右下角等比例缩放，大小和位置自动记忆；− / + 调整透明度；Alt+Shift+M 切换鼠标穿透；Alt+Shift+H 隐藏/显示。
 7. 用完后双击“退出助手.exe”，关闭后台服务和悬浮窗，释放内存及 18731 端口。仅关闭网页会停止该页面的共享与识别，但后台服务仍在运行。
 
+地图点位中的“图标大小”可选 50%、70%、85%、100%、125%；默认 85%，网页与悬浮窗同步，选择自动保存。
+“实时定位”开关可暂停小地图追踪和彩虹掉落检测，保留当前位置；关闭时最快每秒检查一次大地图。重新开启请打开大地图校准。
+跑图时优先读取小地图，打开大地图时自动恢复完整画面识别；约每 5 秒随识别周期核对完整画面。彩虹掉落检测使用最长边 800 像素的场景预览。无需额外设置，浏览器仍需共享完整游戏窗口。
 整个文件夹均需保留；无需安装 Python、无需管理员权限、不写入开机启动。
 首次启动会索引 33 张地图，请等待“本地识别就绪”。可选择 0.25 秒、0.5 秒、1 秒、2 秒或 3 秒识别间隔，自动保存；默认 0.25 秒，实际速度取决于机器。
+彩虹掉落提示（试用）：连续识别到疑似光柱且小地图定位有效时，记录发现时玩家所在位置附近；非掉落物精确坐标，可能误报。网页地图与悬浮窗同步显示，可移除或清空，新一局清空。刷新页面也会清空。
 海岛普通模式已有截图校准，小队海岛和不同分辨率仍需更多实测。
 图片在本机处理，不上传云端；日志和进程号可能写在 app 目录。
 这是未签名的测试版。如出现系统发布者提示，请先确认文件来源。

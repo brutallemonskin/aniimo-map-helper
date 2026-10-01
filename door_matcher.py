@@ -1,7 +1,7 @@
 """Door-constrained registration, verified against visible floor edges only."""
 import json, math
 from pathlib import Path
-from image_io import read_image
+from image_io import read_image, normalize_map_lighting
 import cv2
 import numpy as np
 
@@ -22,8 +22,11 @@ class DoorMatcher:
         return [(s,c) for s,c in zip(stats[1:],cent[1:]) if s[4]>=min_area and .4<s[2]/s[3]<2.2]
 
     def match(self, image, anchor=None):
-        h0,w0=image.shape[:2]; scale=min(1.,1600/w0)
-        im=cv2.resize(image,None,fx=scale,fy=scale);h,w=im.shape[:2]
+        h0,w0=image.shape[:2]
+        if min(h0,w0)<64:return None
+        # Normalize small windows too, while bounding memory for tall inputs.
+        scale=min(1600/max(h0,w0),max(1.,1280/w0))
+        im=normalize_map_lighting(cv2.resize(image,None,fx=scale,fy=scale));h,w=im.shape[:2]
         hsv=cv2.cvtColor(im,cv2.COLOR_BGR2HSV)
         yellow=cv2.inRange(hsv,(22,90,180),(40,255,255))
         blue=cv2.inRange(hsv,(95,90,180),(125,255,255))

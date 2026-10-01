@@ -1,5 +1,5 @@
 """Conservative detection of the bright yellow player arrow in map screenshots."""
-from image_io import read_image
+from image_io import read_image, normalize_map_lighting
 import cv2
 import numpy as np
 from pathlib import Path
@@ -62,6 +62,7 @@ def detect_egg(image):
     return {'point':point.tolist(),'normalized':(point/[w,h]).tolist(),'box':box,'kind':'egg'}
 
 def detect_player(image):
+    image=normalize_map_lighting(image)
     egg=detect_egg(image)
     if egg:return egg
     h,w=image.shape[:2]

@@ -10,6 +10,7 @@ import os
 import threading
 import time
 import urllib.request
+from functools import lru_cache
 from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
@@ -21,7 +22,7 @@ FONT_PATH = 'C:/Windows/Fonts/msyh.ttc'
 SETTINGS = Path(__file__).resolve().parent/'overlay-settings.json'
 
 
-def resize_rect(rect, delta, edges, maximum=2080):
+def resize_rect(rect, delta, edges, maximum=2080, aspect=HEIGHT/WIDTH):
     x,y,w,h=rect; dx,dy=delta
     changes=[]
     if 'l' in edges: changes.append(-dx/w)
@@ -29,8 +30,8 @@ def resize_rect(rect, delta, edges, maximum=2080):
     if 't' in edges: changes.append(-dy/h)
     if 'b' in edges: changes.append(dy/h)
     change=max(changes,key=abs) if changes else 0
-    width=round(max(364,min(maximum,w*(1+change))))
-    height=round(width*HEIGHT/WIDTH)
+    width=round(max(min(364,maximum),min(maximum,w*(1+change))))
+    height=round(width*aspect)
     return (x+w-width if 'l' in edges else x,y+h-height if 't' in edges else y,width,height)
 
 
@@ -38,7 +39,7 @@ def hit_edges(x,y,w,h):
     return ('l' if x<12 else 'r' if x>=w-12 else '')+('t' if y<8 else 'b' if y>=h-12 else '')
 
 
-def fit_map(source, size):
+def crop_map(source):
     source = source.convert('RGBA')
     # The browser frame includes both transparent padding and opaque black atlas margins.
     r, g, b, alpha = source.split()
@@ -46,13 +47,37 @@ def fit_map(source, size):
     bounds = visible.point(lambda v: 255 if v > 38 else 0).getbbox()
     if bounds:
         left, top, right, bottom = bounds
-        source = source.crop((max(0,left-5),max(0,top-5),min(source.width,right+5),min(source.height,bottom+5)))
-    return ImageOps.contain(source, size, Image.Resampling.LANCZOS)
+        source = source.crop((max(0,left-2),max(0,top-2),min(source.width,right+2),min(source.height,bottom+2)))
+    return source
+
+
+def fit_map(source, size):
+    return ImageOps.contain(crop_map(source), size, Image.Resampling.LANCZOS)
+
+
+@lru_cache(maxsize=2)
+def prepared_map(raw):
+    with Image.open(io.BytesIO(base64.b64decode(raw))) as source:
+        source = crop_map(source)
+    height = max(1, round(WIDTH * source.height / source.width))
+    return source.resize((WIDTH, height), Image.Resampling.LANCZOS)
+
+
+def layout_height(state):
+    return BAR + 28 + prepared_map(state['image']).height if state.get('image') else HEIGHT
+
+
+def window_size(width, height, screen_width, screen_height):
+    # Keep the complete map visible when a taller map replaces a wider one.
+    maximum = max(1, min(2080, screen_width, int(max(1, screen_height-60)*WIDTH/height)))
+    width = max(min(364, maximum), min(maximum, width))
+    return width, round(width*height/WIDTH), maximum
 
 
 def render(state, opacity=190, locked=False, hotkeys=True):
     en = state.get('language') == 'en'
-    image = Image.new('RGBA', (WIDTH, HEIGHT), (9, 18, 25, opacity))
+    height = layout_height(state)
+    image = Image.new('RGBA', (WIDTH, height), (9, 18, 25, opacity))
     draw = ImageDraw.Draw(image)
     font = ImageFont.truetype(FONT_PATH, 14)
     small = ImageFont.truetype(FONT_PATH, 12)
@@ -67,11 +92,10 @@ def render(state, opacity=190, locked=False, hotkeys=True):
         draw.text((x, 8), text, font=font, fill='#86e4c4')
     raw = state.get('image')
     if raw:
-        with Image.open(io.BytesIO(base64.b64decode(raw))) as source:
-            source = fit_map(source, (WIDTH-16, HEIGHT-BAR-34))
-            # Uniform translucency preserves the contrast of the map and its icons.
-            source.putalpha(source.getchannel('A').point(lambda a: a * opacity // 255))
-            image.paste(source, ((WIDTH-source.width)//2, BAR+4+(HEIGHT-BAR-34-source.height)//2))
+        source = prepared_map(raw).copy()
+        # Uniform translucency preserves the contrast of the map and its icons.
+        source.putalpha(source.getchannel('A').point(lambda a: a * opacity // 255))
+        image.paste(source, (0, BAR))
     else:
         draw.text((90, 174), ('Open the full game map to begin' if en else '打开游戏大地图，识别后自动显示'), font=font, fill='#d1e1e3')
         draw.text((98, 207), ('Keep the helper and screen sharing open' if en else '请保持助手页面和窗口共享开启'), font=small, fill='#9db1ba')
@@ -80,14 +104,14 @@ def render(state, opacity=190, locked=False, hotkeys=True):
     if en:
         hint = 'Alt+Shift+M: unlock' if locked else 'Drag title: move / edges: resize'
         hint += ' | Alt+Shift+H: hide' if hotkeys else ' | Hotkeys unavailable'
-    draw.text((10, HEIGHT-24), hint, font=small, fill='#b1d7cb')
+    draw.text((10, height-24), hint, font=small, fill='#b1d7cb')
     if not locked:
         for offset in (7,12,17):
-            draw.line((WIDTH-offset,HEIGHT-4,WIDTH-4,HEIGHT-offset),fill='#86e4c4',width=1)
+            draw.line((WIDTH-offset,height-4,WIDTH-4,height-offset),fill='#86e4c4',width=1)
     return image
 
 
-def main():
+def main(smoke=False):
     user = C.WinDLL('user32', use_last_error=True)
     gdi = C.WinDLL('gdi32', use_last_error=True)
     kernel = C.WinDLL('kernel32', use_last_error=True)
@@ -146,12 +170,14 @@ def main():
     state = {'title': '等待识别地宫', 'image': None}
     opacity, locked, hidden, hotkeys = 190, False, False, False
     window_width,window_height=WINDOW_WIDTH,WINDOW_HEIGHT
+    logical_height=HEIGHT
     maximum_width=max(364,min(2080,user.GetSystemMetrics(0),round((user.GetSystemMetrics(1)-60)*WIDTH/HEIGHT)))
     saved={}
-    try:
-        saved=json.loads(SETTINGS.read_text(encoding='utf-8'))
-        if not isinstance(saved,dict): saved={}
-    except (OSError,ValueError): pass
+    if not smoke:
+        try:
+            saved=json.loads(SETTINGS.read_text(encoding='utf-8'))
+            if not isinstance(saved,dict): saved={}
+        except (OSError,ValueError): pass
     def setting(key,default):
         value=saved.get(key,default)
         return value if isinstance(value,int) and not isinstance(value,bool) else default
@@ -162,7 +188,7 @@ def main():
     hwnd = None
 
     def save_settings():
-        if not hwnd:return
+        if smoke or not hwnd:return
         rect=W.RECT();user.GetWindowRect(hwnd,C.byref(rect))
         try:
             temporary=SETTINGS.with_suffix('.tmp')
@@ -201,7 +227,7 @@ def main():
 
     @WNDPROC
     def proc(handle, msg, wp, lp):
-        nonlocal opacity, drag, hidden, state, window_width, window_height
+        nonlocal opacity, drag, hidden, state, window_width, window_height, logical_height, maximum_width
         try:
             if msg == 0x21: return 3  # MA_NOACTIVATE: do not steal focus from the game.
             if msg == 0x201:
@@ -212,7 +238,7 @@ def main():
                 user.GetCursorPos(C.byref(p));user.GetWindowRect(handle,C.byref(r))
                 if edges:
                     drag=(edges,p.x,p.y,(r.left,r.top,window_width,window_height));user.SetCapture(handle);return 0
-                x,y=px*WIDTH/window_width,py*HEIGHT/window_height
+                x,y=px*WIDTH/window_width,py*logical_height/window_height
                 if y < BAR:
                     if x > WIDTH-42: user.DestroyWindow(handle)
                     elif x > WIDTH-100: toggle_lock()
@@ -229,7 +255,7 @@ def main():
                 if edges=='move':
                     user.SetWindowPos(handle,W.HWND(-1),rect[0]+p.x-sx,rect[1]+p.y-sy,0,0,0x11)
                 else:
-                    x,y,window_width,window_height=resize_rect(rect,(p.x-sx,p.y-sy),edges,maximum_width)
+                    x,y,window_width,window_height=resize_rect(rect,(p.x-sx,p.y-sy),edges,maximum_width,logical_height/WIDTH)
                     user.SetWindowPos(handle,W.HWND(-1),x,y,window_width,window_height,0x10);paint()
                 return 0
             if msg == 0x20 and not locked:
@@ -247,8 +273,19 @@ def main():
                     hidden = not hidden; user.ShowWindow(handle, 0 if hidden else 4)
                 return 0
             if msg == 0x113:
-                try: state = updates.get_nowait()
-                except queue.Empty: pass
+                if smoke: user.DestroyWindow(handle); return 0
+                if not drag:
+                    try: state = updates.get_nowait()
+                    except queue.Empty: pass
+                    next_height=layout_height(state)
+                    if next_height != logical_height:
+                        logical_height=next_height
+                        window_width,window_height,maximum_width=window_size(window_width,logical_height,user.GetSystemMetrics(0),user.GetSystemMetrics(1))
+                        rect=W.RECT();user.GetWindowRect(handle,C.byref(rect))
+                        vx,vy,vw,vh=[user.GetSystemMetrics(i) for i in (76,77,78,79)]
+                        x=max(vx,min(vx+vw-window_width,rect.left))
+                        y=max(vy,min(vy+vh-window_height,rect.top))
+                        user.SetWindowPos(handle,W.HWND(-1),x,y,window_width,window_height,0x10)
                 if not hidden: paint()
                 return 0
             if msg == 2:
@@ -273,6 +310,13 @@ def main():
     paint()
     user.ShowWindow(hwnd, 4)
     user.SetWindowPos(hwnd, W.HWND(-1), 0, 0, 0, 0, 0x13)
+    if smoke:
+        style = user.GetWindowLongPtrW(hwnd, -20)
+        assert style & 0x80000 and style & 0x8 and style & 0x8000000
+        if hotkeys:
+            toggle_lock(); assert user.GetWindowLongPtrW(hwnd, -20) & 0x20
+            toggle_lock(); assert not user.GetWindowLongPtrW(hwnd, -20) & 0x20
+
     def poll():
         while not finished.is_set():
             try:
@@ -285,15 +329,16 @@ def main():
             updates.put_nowait(value)
             finished.wait(.25)
 
-    threading.Thread(target=poll, daemon=True).start()
-    user.SetTimer(hwnd, 1, 250, None)
+    if not smoke: threading.Thread(target=poll, daemon=True).start()
+    user.SetTimer(hwnd, 1, 1000 if smoke else 250, None)
     message = W.MSG()
     while True:
         code = user.GetMessageW(C.byref(message), None, 0, 0)
         if code <= 0: break
         user.TranslateMessage(C.byref(message)); user.DispatchMessageW(C.byref(message))
     user.UnregisterHotKey(hwnd, 1); user.UnregisterHotKey(hwnd, 2)
+    if smoke: print('PASS: native layered/topmost/non-activating window, paint, click-through style, close')
 
 
 if __name__ == '__main__':
-    main()
+    main('--smoke-test' in sys.argv)

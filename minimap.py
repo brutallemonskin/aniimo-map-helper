@@ -22,6 +22,11 @@ class MinimapTracker:
         cx,cy,r=round(w*.0945),round(h*.132),round(h*.089)
         crop=image[cy-r:cy+r,cx-r:cx+r]
         if crop.size==0:return None
+        return MinimapTracker.extract_crop(crop)
+
+    @staticmethod
+    def extract_crop(crop):
+        """Validate the HUD on every crop; a missing HUD requests a full frame."""
         crop=cv2.resize(crop,(200,200))
         raw_gray=cv2.cvtColor(crop,cv2.COLOR_BGR2GRAY)
         hsv=cv2.cvtColor(crop,cv2.COLOR_BGR2HSV)

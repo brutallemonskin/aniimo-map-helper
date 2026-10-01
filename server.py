@@ -64,7 +64,20 @@ class Handler(SimpleHTTPRequestHandler):
                 if s is not None and (not isinstance(s,(int,float)) or not math.isfinite(s) or not .3<=s<=3):raise ValueError('无效小地图比例')
             outdoor_mode=d.get('outdoor_mode','egg-heist')
             if outdoor_mode not in ('egg-heist','egg-heist-team-mode'):raise ValueError('无效海岛模式')
-            answer=matcher.match(im,anchor,tracking,outdoor_mode)
+            realtime_tracking=d.get('realtime_tracking',True)
+            if not isinstance(realtime_tracking,bool):raise ValueError('无效实时定位选项')
+            capture_kind=d.get('capture_kind','full')
+            if capture_kind not in ('full','minimap'):raise ValueError('无效画面类型')
+            if capture_kind=='minimap':
+                if im.shape[0]!=im.shape[1] or not 64<=im.shape[0]<=1024:raise ValueError('无效小地图截图')
+                scene=None
+                if d.get('scene') is not None:
+                    scene_raw=base64.b64decode(d['scene'].split(',')[-1],validate=True)
+                    scene=cv2.imdecode(np.frombuffer(scene_raw,np.uint8),cv2.IMREAD_COLOR)
+                    if scene is None or max(scene.shape[:2])>800:raise ValueError('无效掉落预览')
+                answer=matcher.match_crop(im,tracking,realtime_tracking,scene)
+            else:
+                answer=matcher.match(im,anchor,tracking,outdoor_mode,realtime_tracking=realtime_tracking)
             self.json(answer)
         except Exception as e: self.json({'error':str(e)},400)
 

@@ -1,3 +1,35 @@
+## v0.3.8 · 小地图性能优化与悬浮窗更新
+
+### 更新内容
+
+- 跑图时优先传送小地图裁切图；小地图消失后，本轮自动补读完整画面。打开大地图仍可正常识别和校准，并定期进行完整画面检查。
+- 游戏预览最长边限制为 800 像素；彩虹掉落检测使用低分辨率预览，减少图片传输与解码开销。浏览器仍需共享完整游戏窗口，实际收益取决于设备和画面。
+- 新增“实时定位”开关；关闭后保留最后位置，暂停小地图追踪和彩虹检测，大地图识别继续可用。保留 0.25 / 0.5 / 1 / 2 / 3 秒间隔选择。
+- 打开背包等遮挡地图的界面时保留最后位置，返回游戏后自动恢复小地图追踪。传送、切换地宫或移动过远后，请重新打开大地图校准。
+- 点位图标大小可调并立即同步悬浮窗；类别显示选择自动保存，下一次识别、地图切换及刷新后继续生效。
+- 补齐蓝门、金紫蓝钥匙房及对应伊莫物种的原始素材；伊莫使用普通形态图片。悬浮窗按地图内容调整比例，减少留白并保留拖动缩放。
+- 改善偏暗、较小窗口的入口识别兼容性，未降低这次版本的地图确认阈值。
+- 新增试用彩虹掉落提示：连续确认光柱且定位有效时，记录发现时玩家所在位置附近；并非掉落物精确坐标，可手动移除或清空。
+
+### 下载与更新
+
+下载 **AniimoNavigator-Portable-v0.3.8.zip**，无需安装 Python。
+
+1. 先运行旧版“退出助手.exe”。
+2. 将新压缩包完整解压到新文件夹，不要覆盖正在运行的目录。
+3. 双击“启动助手.exe”，使用 Chrome / Edge 选择游戏窗口。
+4. 进入地宫后打开一次大地图校准，再关闭大地图继续跑图。
+
+附带 SHA-256 校验文件。源码和便携包不包含开发测试、测试截图、个人日志或临时诊断文件。
+
+### English
+
+This release adds adaptive minimap-only tracking with automatic full-frame fallback, a smaller scene preview, an optional live-tracking switch, persistent marker visibility and size settings, original marker artwork, an adaptive overlay layout, entrance compatibility improvements and experimental nearby rainbow-loot markers. Map-obscuring menus retain the last known position; tracking resumes when the minimap returns. Screen sharing still captures the full game window.
+
+Exit the previous helper, extract the complete ZIP into a new folder, then run **启动助手.exe**. Open the full game map once to calibrate. The in-app English interface remains available.
+
+---
+
 # v0.3.6 · 简化启动文件与中文默认界面
 
 - 便携包根目录仅保留“启动助手.exe”和“退出助手.exe”，移除重复的英文启动、退出文件。
