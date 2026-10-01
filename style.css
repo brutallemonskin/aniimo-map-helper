@@ -6,3 +6,6 @@
 .region-controls{position:absolute;right:18px;top:16px;display:flex;gap:6px}.region-controls select,.region-controls button{font-size:11px;background:#17232bed;white-space:nowrap}.region-controls [hidden]{display:none}@media(max-width:760px){.region-controls{top:52px;right:12px}.region-controls select{max-width:160px}}
 .mode-choice{display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:11px;color:#91a6b3}.mode-choice select{font-size:11px;padding:6px 8px}
 .overlay-controls{margin:10px 0 12px}.overlay-controls button{width:100%;color:#8fe1c6;border-color:#365a50}.overlay-controls button[aria-pressed=true]{background:#183d32}.overlay-controls p{font-size:10px;line-height:1.7;color:#88a398;margin:7px 0 0}
+
+/* English labels need flexible wrapping in the compact console. */
+.header-actions{flex-wrap:wrap}#language{font-size:12px;padding:7px 9px}html[lang=en] .brand strong{font-size:18px}html[lang=en] .capture-actions{flex-wrap:wrap}html[lang=en] .legend{flex-wrap:wrap}html[lang=en] .candidate-title{overflow-wrap:anywhere}html[lang=en] .header-actions .pill{font-size:11px}

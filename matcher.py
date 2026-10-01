@@ -1,5 +1,6 @@
 import json, threading
 from pathlib import Path
+from image_io import read_image
 import cv2
 import numpy as np
 from door_matcher import DoorMatcher
@@ -26,14 +27,19 @@ class Matcher:
 
     def build(self):
         try:
+            self.maps = []
+            self.error = None
+            self.ready = False
+            read_image(ROOT/'data/player-egg-template.png')
             for m in json.loads((ROOT/'data/catalog.json').read_text(encoding='utf8')):
                 if not (m['id'].startswith('sanctum-') or m['id'].startswith('egg-heist')): continue
-                im = cv2.imread(str(ROOT / m['image'].lstrip('/')))
-                if im is None or im.shape[1] < 512: continue
+                im = read_image(str(ROOT / m['image'].lstrip('/')))
+                if im.shape[1] < 512: raise ValueError('Map image too small: '+m['id'])
                 scale = min(1., 1400/im.shape[1])
                 im = cv2.resize(im, None, fx=scale, fy=scale)
                 kp, des = self.sift.detectAndCompute(self.gray(im), None)
                 self.maps.append((m, scale, np.float32([k.pt for k in kp]), des))
+            if not self.maps: raise ValueError('No map images found. Extract the complete ZIP again.')
             self.doors = DoorMatcher(ROOT)
             self.ready = True
         except Exception as e:

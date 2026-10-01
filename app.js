@@ -19,7 +19,7 @@ async function publishOverlay(force=false){
      image=copy.toDataURL('image/png');
      title=current.name+(result.held?' · 保留上次位置':result.position?' · 你的位置':' · 等待角色定位');
    }
-   const response=await fetch('/api/overlay/frame',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image,title})});
+   const response=await fetch('/api/overlay/frame',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image,title:t(title),language:I18N.language})});
    if(!response.ok)throw Error('悬浮窗同步失败');
  }catch(e){$('overlay-hint').textContent='悬浮窗暂未同步，请检查本地服务。';}finally{overlaySending=false;if(overlayPending){overlayPending=false;publishOverlay(true);}}
 }
@@ -52,7 +52,7 @@ function regionAt(position){
 function regionBounds(){if(!isSea()||seaView==='all'||!activeSeaRegion)return null;const [x,y,w,h]=activeSeaRegion.box;return {x:x*current.width/900,y:y*current.height/600,w:w*current.width/900,h:h*current.height/600};}
 function syncSeaRegion(){
  $('sea-region').hidden=!isSea();$('region-follow').hidden=!isSea();
- const fitLabel=isSea()?'全岛':'全图';if($('fit').textContent!==fitLabel)$('fit').textContent=fitLabel;
+ const fitLabel=t(isSea()?'全岛':'全图');if($('fit').textContent!==fitLabel)$('fit').textContent=fitLabel;
  if(!isSea()){activeSeaRegion=null;return false;}
  const next=seaView==='auto'?(result?.id===current.id&&result.position?regionAt(result.position):null):seaRegions.find(r=>r.id===seaView);
  const changed=next?.id!==activeSeaRegion?.id;activeSeaRegion=next||null;return changed;
@@ -86,7 +86,7 @@ const ICON_PATHS={
 const iconPaths=Object.fromEntries(Object.entries(ICON_PATHS).map(([k,v])=>[k,new Path2D(v)]));
 function icon(name){const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('class','ui-icon');svg.setAttribute('aria-hidden','true');const p=document.createElementNS(svg.namespaceURI,'path');p.setAttribute('d',ICON_PATHS[name]||ICON_PATHS.diamond);svg.append(p);return svg;}
 function markerStyle(category,color){if(category==='sanctums')return {icon:'door',color:'#82beff',size:22};if(category==='teleporters'||category==='extraction')return {icon:'star',color:'#8ee0c4',size:22};if(category==='entrance')return {icon:'door',color:'#ffd36b',size:27,label:'黄门'};if(category==='side-entrance')return {icon:'side',color:'#82beff',size:27,label:'蓝门'};if(category.includes('egg'))return {icon:'egg',color:'#ffe9b0',size:20};if(category.includes('chest'))return {icon:'chest',color:color||'#ffc662',size:18};if(category.includes('key-room'))return {icon:'key',color:color||'#ffd36b',size:20};if(category==='merchants')return {icon:'shop',color:'#8ee0c4',size:20};if(category==='aniimo'||category.includes('spawn'))return {icon:'creature',color:color||'#ef9aab',size:18};if(category==='rooms')return {icon:'room',color:'#acbbc9',size:17};if(category.includes('unique'))return {icon:'star',color:'#c9acff',size:20};if(category.includes('boat'))return {icon:'boat',color:'#89d9f5',size:22};return {icon:'diamond',color:color||'#d7e2ed',size:18};}
-function drawMarker(p,style,ctx,zoom,markerScale=1){const {color}=style;const size=style.size*1.4*markerScale;ctx.save();ctx.translate(p.x,p.y);ctx.scale(1/zoom,1/zoom);ctx.shadowColor='#0009';ctx.shadowBlur=3;ctx.fillStyle='#101b25';ctx.strokeStyle=color;ctx.lineWidth=1.15;ctx.beginPath();ctx.arc(0,0,size/2,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;const s=(size-5)/24;ctx.scale(s,s);ctx.translate(-12,-12);ctx.lineWidth=1.9;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(iconPaths[style.icon]);ctx.restore();if(style.label){ctx.save();ctx.font=`600 ${11*Math.max(.75,markerScale)/zoom}px sans-serif`;ctx.lineWidth=3/zoom;ctx.strokeStyle='#0b141e';ctx.strokeText(style.label,p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.fillStyle=color;ctx.fillText(style.label,p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.restore();}}
+function drawMarker(p,style,ctx,zoom,markerScale=1){const {color}=style;const size=style.size*1.4*markerScale;ctx.save();ctx.translate(p.x,p.y);ctx.scale(1/zoom,1/zoom);ctx.shadowColor='#0009';ctx.shadowBlur=3;ctx.fillStyle='#101b25';ctx.strokeStyle=color;ctx.lineWidth=1.15;ctx.beginPath();ctx.arc(0,0,size/2,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;const s=(size-5)/24;ctx.scale(s,s);ctx.translate(-12,-12);ctx.lineWidth=1.9;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(iconPaths[style.icon]);ctx.restore();if(style.label){ctx.save();ctx.font=`600 ${11*Math.max(.75,markerScale)/zoom}px sans-serif`;ctx.lineWidth=3/zoom;ctx.strokeStyle='#0b141e';ctx.strokeText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.fillStyle=color;ctx.fillText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.restore();}}
 function newRun(){seaView='auto';$('sea-region').value='auto';history=[];lastSignature=null;result=null;tracking=null;lastKnown=null;trackedAt=0;generation++;$('position-status').textContent='先开大地图校准，再用小地图追踪';$('result').textContent='新一局 · 等待主门附近地图';$('reason').textContent='从黄门进入后打开地图，探索更多房间以缩小候选。';$('candidates').replaceChildren();draw();}
 function notice(text){$('reason').textContent=text;}
 async function loadMap(id){
@@ -102,7 +102,7 @@ function fit(){if(!current)return;syncSeaRegion();const b=regionBounds()||mapBou
 function paintMap(ctx,zoom,ox,oy,markerScale=1){
  ctx.save();ctx.translate(ox,oy);ctx.scale(zoom,zoom);const crop=regionBounds();if(crop){ctx.beginPath();ctx.rect(crop.x,crop.y,crop.w,crop.h);ctx.clip();}ctx.drawImage(bitmap,0,0,current.width,current.height);
  const seen=new Set(),doors=[];for(const p of current.points){if(!enabled.has(p.category))continue;const key=p.category+':'+p.x+':'+p.y;if(seen.has(key))continue;seen.add(key);if(p.category==='entrance'||p.category==='side-entrance'){doors.push(p);continue;}const cat=current.categories.find(c=>c.id===p.category);drawMarker(p,markerStyle(p.category,cat?.color),ctx,zoom,markerScale);}for(const p of doors)drawMarker(p,markerStyle(p.category),ctx,zoom,markerScale);
- if(result&&result.id===current.id){ctx.strokeStyle='#58ead2';ctx.fillStyle='#58ead213';ctx.lineWidth=2/zoom;ctx.beginPath();result.polygon.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.closePath();ctx.fill();ctx.stroke();if(result.position){ctx.fillStyle=result.held?'#e6b75b':'#ff7188';ctx.beginPath();ctx.arc(...result.position,9/zoom,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2/zoom;ctx.stroke();ctx.font=`600 ${12/zoom}px sans-serif`;ctx.fillStyle='#fff';ctx.strokeStyle='#111b29';ctx.lineWidth=3/zoom;const playerLabel=result.held?'你·上次':result.position_source==='auto'?'你':'手动';ctx.strokeText(playerLabel,result.position[0]+14/zoom,result.position[1]+4/zoom);ctx.fillText(playerLabel,result.position[0]+14/zoom,result.position[1]+4/zoom);}}
+ if(result&&result.id===current.id){ctx.strokeStyle='#58ead2';ctx.fillStyle='#58ead213';ctx.lineWidth=2/zoom;ctx.beginPath();result.polygon.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.closePath();ctx.fill();ctx.stroke();if(result.position){ctx.fillStyle=result.held?'#e6b75b':'#ff7188';ctx.beginPath();ctx.arc(...result.position,9/zoom,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2/zoom;ctx.stroke();ctx.font=`600 ${12/zoom}px sans-serif`;ctx.fillStyle='#fff';ctx.strokeStyle='#111b29';ctx.lineWidth=3/zoom;const playerLabel=t(result.held?'你·上次':result.position_source==='auto'?'你':'手动');ctx.strokeText(playerLabel,result.position[0]+14/zoom,result.position[1]+4/zoom);ctx.fillText(playerLabel,result.position[0]+14/zoom,result.position[1]+4/zoom);}}
  ctx.restore();
 }
 function draw(){
@@ -111,7 +111,7 @@ function draw(){
  paintMap(ctx,zoom,ox,oy);$('viewmode').textContent=isSea()?(activeSeaRegion&&seaView!=='all'?activeSeaRegion.name+' · 分区地图':'全岛总览'):(result&&result.id===current.id?(result.held?'保留上次位置':'匹配范围'):'全图浏览');
  publishOverlay();
 }
-let drag=null;canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,ox,oy};canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(drag){ox=drag.ox+e.clientX-drag.x;oy=drag.oy+e.clientY-drag.y;draw();}};canvas.onpointerup=e=>{if(drag&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<5&&current){const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left-ox)/zoom,y=(e.clientY-r.top-oy)/zoom;const near=current.points.filter(p=>enabled.has(p.category)&&Math.hypot(p.x-x,p.y-y)<20/zoom);$('tooltip').textContent=[...new Set(near.map(p=>p.name))].join(' / ');$('tooltip').style.display=near.length?'block':'none';}drag=null;};canvas.onwheel=e=>{e.preventDefault();const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const z=Math.max(.08,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));ox=x-(x-ox)*z/zoom;oy=y-(y-oy)*z/zoom;zoom=z;draw();};
+let drag=null;canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,ox,oy};canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(drag){ox=drag.ox+e.clientX-drag.x;oy=drag.oy+e.clientY-drag.y;draw();}};canvas.onpointerup=e=>{if(drag&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<5&&current){const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left-ox)/zoom,y=(e.clientY-r.top-oy)/zoom;const near=current.points.filter(p=>enabled.has(p.category)&&Math.hypot(p.x-x,p.y-y)<20/zoom);$('tooltip').textContent=[...new Set(near.map(p=>pointName(p)))].join(' / ');$('tooltip').style.display=near.length?'block':'none';}drag=null;};canvas.onwheel=e=>{e.preventDefault();const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const z=Math.max(.08,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));ox=x-(x-ox)*z/zoom;oy=y-(y-oy)*z/zoom;zoom=z;draw();};
 new ResizeObserver(()=>fit()).observe($('mapwrap'));
 function preview(){if(!frame)return;cc.clearRect(0,0,cap.width,cap.height);cc.drawImage(frame,0,0,cap.width,cap.height);$('empty').hidden=true;}
 $('newrun').onclick=newRun;$('outdoor-mode').onchange=()=>{newRun();notice('海岛模式已更换，请打开大地图重新校准。');};
@@ -169,8 +169,18 @@ $('focus').onclick=()=>{const active=document.body.classList.toggle('focus-mode'
 function zoomBy(factor){const x=canvas.clientWidth/2,y=canvas.clientHeight/2,z=Math.max(.08,Math.min(8,zoom*factor));ox=x-(x-ox)*z/zoom;oy=y-(y-oy)*z/zoom;zoom=z;draw();}
 $('zoom-in').onclick=()=>zoomBy(1.3);$('zoom-out').onclick=()=>zoomBy(1/1.3);
 document.querySelector('.upload').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('file').click();}};
-async function status(){try{const s=await fetch('/api/status').then(r=>r.json());$('engine').textContent=s.error?'识别引擎异常':s.ready?`${s.indexed} 张地图 · 本地识别就绪`:`正在索引 ${s.indexed} 张地图…`;if(!s.ready&&!s.error)setTimeout(status,1500);}catch(e){$('engine').textContent='本地服务未连接';}}
+async function status(){try{const s=await fetch('/api/status').then(r=>r.json());$('engine').title=s.error||'';if(s.error)notice('识别引擎异常：'+s.error);$('engine').textContent=s.error?'识别引擎异常':s.ready?`${s.indexed} 张地图 · 本地识别就绪`:`正在索引 ${s.indexed} 张地图…`;if(!s.ready&&!s.error)setTimeout(status,1500);}catch(e){$('engine').textContent='本地服务未连接';}}
 async function init(){await loadMap('sanctum-31');status();overlayStatus();}init().catch(e=>notice('地图加载失败：'+e.message));
 const buttonIcons={newrun:'reset',focus:'focus',share:'monitor',stop:'stop',once:'scan',fit:'focus','zoom-in':'plus','zoom-out':'minus'};
-function decorateButtons(){for(const [id,name]of Object.entries(buttonIcons)){const el=$(id);if(!el||el.querySelector('.ui-icon'))continue;if(id==='newrun')el.textContent=el.textContent.replace('↻ ','');if(id==='source')el.textContent=el.textContent.replace(' ↗','');if(id==='zoom-in'||id==='zoom-out')el.replaceChildren();el.prepend(icon(name));}const label=document.querySelector('.upload');if(!label.querySelector('.ui-icon'))label.prepend(icon('upload'));}
+function decorateButtons(){for(const [id,name]of Object.entries(buttonIcons)){const el=$(id);if(!el||el.querySelector('.ui-icon'))continue;if(id==='source')el.textContent=el.textContent.replace(' ↗','');if(id==='zoom-in'||id==='zoom-out')el.replaceChildren();el.prepend(icon(name));}const label=document.querySelector('.upload');if(!label.querySelector('.ui-icon'))label.prepend(icon('upload'));}
 decorateButtons();for(const id of Object.keys(buttonIcons))new MutationObserver(decorateButtons).observe($(id),{childList:true});document.querySelector('.brand>b').replaceChildren(icon('compass'));document.querySelector('#empty>span').replaceChildren(icon('monitor'));
+
+function pointName(point){
+ if(I18N.language!=='en')return point.name;
+ const translated=t(point.name);
+ if(!/[\u3400-\u9fff]/.test(translated))return translated;
+ // Unknown proper names retain their source spelling after an English category.
+ const category=current?.categories.find(c=>c.id===point.category);
+ return t(category?.name||point.category)+' ('+point.name+')';
+}
+window.addEventListener('languagechange',()=>{draw();publishOverlay(true);});

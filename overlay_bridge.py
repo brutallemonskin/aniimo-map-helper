@@ -16,13 +16,14 @@ class OverlayBridge:
         self.process = None
         self.image = None
         self.title = '等待识别地宫'
+        self.language = 'zh-CN'
         self.updated = 0
         self.version = 0
 
     def status(self):
         with self.lock:
             return {'enabled': self.process is not None and self.process.poll() is None,
-                    'title': self.title, 'updated': self.updated, 'version': self.version}
+                    'title': self.title, 'language': self.language, 'updated': self.updated, 'version': self.version}
 
     def start(self):
         with self.lock:
@@ -67,6 +68,7 @@ class OverlayBridge:
             if self.status()['enabled']:
                 self.image = raw
                 self.title = title
+                self.language = 'en' if payload.get('language') == 'en' else 'zh-CN'
                 self.updated = time.time()
                 self.version += 1
             return self.status()

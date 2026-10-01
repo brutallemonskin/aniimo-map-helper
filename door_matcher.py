@@ -1,6 +1,7 @@
 """Door-constrained registration, verified against visible floor edges only."""
 import json, math
 from pathlib import Path
+from image_io import read_image
 import cv2
 import numpy as np
 
@@ -11,7 +12,7 @@ class DoorMatcher:
             d=json.loads(p.read_text(encoding='utf8'))
             doors=[next((q for q in d['points'] if q['category']==c),None) for c in ('entrance','side-entrance')]
             if not all(doors):continue
-            im=cv2.imread(str(root/d['image'].lstrip('/')))
+            im=read_image(str(root/d['image'].lstrip('/')))
             gray=cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
             self.refs.append((d,np.float32([[p['x'],p['y']] for p in doors]),gray))
 

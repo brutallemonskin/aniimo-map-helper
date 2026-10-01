@@ -23,7 +23,7 @@ class Handler(SimpleHTTPRequestHandler):
         if path=='/api/overlay': return self.json(overlay.status())
         if path=='/api/overlay/frame': return self.json(overlay.snapshot())
         if path=='/': self.path='/index.html'
-        elif path not in ('/index.html','/app.js','/style.css') and not (path.startswith('/data/') and '..' not in urllib.parse.unquote(path)):
+        elif path not in ('/index.html','/app.js','/style.css','/i18n.js') and not (path.startswith('/data/') and '..' not in urllib.parse.unquote(path)):
             return self.send_error(404)
         return super().do_GET()
     def do_POST(self):

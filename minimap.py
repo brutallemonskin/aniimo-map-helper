@@ -4,6 +4,7 @@ Coordinates are image pixels. No keyboard input or game process access is used.
 """
 import json
 from pathlib import Path
+from image_io import read_image
 import cv2
 import numpy as np
 
@@ -65,7 +66,7 @@ class MinimapTracker:
             path=self.root/'data'/f'{map_id}.json'
             if not path.is_file():return dict(missing,reason='请先确认地图。')
             d=json.loads(path.read_text(encoding='utf8'))
-            im=cv2.imread(str(self.root/d['image'].lstrip('/')),cv2.IMREAD_GRAYSCALE)
+            im=read_image(str(self.root/d['image'].lstrip('/')),cv2.IMREAD_GRAYSCALE)
             self.refs[map_id]=(d,im)
         d,ref=self.refs[map_id]
         if previous is None:return dict(missing,reason='请打开大地图校准角色起点。')

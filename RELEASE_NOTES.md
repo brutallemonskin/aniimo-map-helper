@@ -1,15 +1,19 @@
-# v0.2 · Windows 便携版
+# v0.3.1 · 中文路径修复 / Unicode path fix
 
-解压后双击“启动助手.exe”，无需安装 Python。结束后双击“退出助手.exe”。
+## 更新内容
+- 修复解压目录或 Windows 用户目录包含中文时，地图图片读取失败、出现“识别引擎异常”的问题。
+- 地图、门位置索引、小地图底图和蛋形态模板统一支持 Unicode 路径。
+- 素材缺失、空文件或损坏时显示具体文件名和重新解压提示。
+- 包含中英文界面切换、英文悬浮窗和英文启动入口；默认识别间隔仍为 0.25 秒。
 
-- 地宫地图识别、自动切图和小地图玩家定位。
-- 蓝白星纹蛋形态识别，画面遮挡时保留最后位置。
-- 海岛地图与分区显示。
-- 半透明置顶悬浮窗，可拖动移动、拖动边角等比例缩放。
-- 自动保存悬浮窗大小、位置和透明度。
-- 鼠标穿透、显示/隐藏快捷键。
-- 悬浮窗点位图标为原尺寸的 80%，玩家标记保持醒目。
+## 下载与升级
+下载 **AniimoNavigator-Portable-v0.3.1.zip**。先双击旧版“退出助手.exe”，再将新版完整解压到新目录，运行“启动助手.exe”或 **Start Navigator.exe**。无需安装 Python。
 
-支持 Windows 10/11 x64，建议 Chrome 或 Edge。源码和安装包均不包含开发测试用例、实机截图、调试样例及个人日志。
+已验证：在包含中文和空格的目录中解压并使用包内运行库启动，33 张地图和门位置索引全部正常；缺失、空白、损坏素材提示及定位回归检查通过。公开源码与压缩包不包含开发测试、实机截图和个人日志。
 
-已验证解压后独立启动、33 张地图索引、实机截图匹配与角色位置、悬浮窗启动、正常退出，以及等比例缩放逻辑。不同电脑和游戏版本的兼容性仍需用户反馈。
+## English
+Fixes map initialization failures when the extracted folder or Windows user path contains non-ASCII characters. All image readers now support Unicode paths and report missing or corrupt assets by filename.
+
+Includes the Chinese/English interface, localized overlay, English launchers and README_EN.md. Exit the old helper, extract the entire new ZIP, then run **Start Navigator.exe**. The bundled runtime was verified under a Chinese path containing spaces with all 33 maps indexed successfully.
+
+English-language game capture compatibility has not yet been verified. Unknown creature/item proper names retain their original spelling alongside an English category.

@@ -1,9 +1,13 @@
 """Conservative detection of the bright yellow player arrow in map screenshots."""
+from image_io import read_image
 import cv2
 import numpy as np
 from pathlib import Path
 
-_egg=cv2.imread(str(Path(__file__).resolve().parent/'data/player-egg-template.png'),cv2.IMREAD_GRAYSCALE)
+try:
+    _egg=read_image(str(Path(__file__).resolve().parent/'data/player-egg-template.png'),cv2.IMREAD_GRAYSCALE)
+except ValueError:
+    _egg=None  # The index builder reports the missing asset through /api/status.
 
 def detect_egg(image):
     if _egg is None:return None

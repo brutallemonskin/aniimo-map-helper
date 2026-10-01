@@ -51,16 +51,19 @@ def fit_map(source, size):
 
 
 def render(state, opacity=190, locked=False, hotkeys=True):
+    en = state.get('language') == 'en'
     image = Image.new('RGBA', (WIDTH, HEIGHT), (9, 18, 25, opacity))
     draw = ImageDraw.Draw(image)
     font = ImageFont.truetype(FONT_PATH, 14)
     small = ImageFont.truetype(FONT_PATH, 12)
     draw.rectangle((0, 0, WIDTH, BAR), fill=(17, 32, 39, 235))
-    title = state.get('title', '等待识别地宫')
+    title = state.get('title', 'Waiting for dungeon' if en else '等待识别地宫')
     if state.get('image') and state.get('updated') and time.time() - state['updated'] > 4:
-        title = '画面暂停 · 上次位置'
-    draw.text((12, 9), title[:23], font=font, fill='#e4f4ef')
-    for x, text in [(WIDTH-148, '−'), (WIDTH-117, '+'), (WIDTH-87, '穿透'), (WIDTH-29, '×')]:
+        title = 'Paused · Last position' if en else '画面暂停 · 上次位置'
+    while draw.textlength(title, font=font) > WIDTH-175 and title:
+        title=title[:-1]
+    draw.text((12, 9), title, font=font, fill='#e4f4ef')
+    for x, text in [(WIDTH-148, '−'), (WIDTH-117, '+'), (WIDTH-87, 'Lock' if en else '穿透'), (WIDTH-29, '×')]:
         draw.text((x, 8), text, font=font, fill='#86e4c4')
     raw = state.get('image')
     if raw:
@@ -70,10 +73,13 @@ def render(state, opacity=190, locked=False, hotkeys=True):
             source.putalpha(source.getchannel('A').point(lambda a: a * opacity // 255))
             image.paste(source, ((WIDTH-source.width)//2, BAR+4+(HEIGHT-BAR-34-source.height)//2))
     else:
-        draw.text((90, 174), '打开游戏大地图，识别后自动显示', font=font, fill='#d1e1e3')
-        draw.text((98, 207), '请保持助手页面和窗口共享开启', font=small, fill='#9db1ba')
+        draw.text((90, 174), ('Open the full game map to begin' if en else '打开游戏大地图，识别后自动显示'), font=font, fill='#d1e1e3')
+        draw.text((98, 207), ('Keep the helper and screen sharing open' if en else '请保持助手页面和窗口共享开启'), font=small, fill='#9db1ba')
     hint = 'Alt+Shift+M 解锁调整' if locked else '标题栏移动 · 拖动边角缩放'
     hint += ' · Alt+Shift+H 隐藏' if hotkeys else ' · 快捷键被占用，穿透未开启'
+    if en:
+        hint = 'Alt+Shift+M: unlock' if locked else 'Drag title: move / edges: resize'
+        hint += ' | Alt+Shift+H: hide' if hotkeys else ' | Hotkeys unavailable'
     draw.text((10, HEIGHT-24), hint, font=small, fill='#b1d7cb')
     if not locked:
         for offset in (7,12,17):
@@ -273,7 +279,7 @@ def main():
                 with urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('ANIIMO_PORT','18731')+'/api/overlay/frame', timeout=2) as reply:
                     value = json.load(reply)
             except Exception:
-                value = {'title': '助手连接中断 · 请检查本地页面', 'image': None}
+                value = {'title': 'Helper disconnected' if state.get('language') == 'en' else '助手连接中断 · 请检查本地页面', 'language': state.get('language','zh-CN'), 'image': None}
             try: updates.get_nowait()
             except queue.Empty: pass
             updates.put_nowait(value)

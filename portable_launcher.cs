@@ -7,6 +7,8 @@ using System.Threading;
 using System.Windows.Forms;
 
 class PortableLauncher {
+    static bool English = !System.Globalization.CultureInfo.CurrentUICulture.Name.StartsWith("zh");
+    static string L(string zh, string en) { return English ? en : zh; }
     const string Url = "http://127.0.0.1:18731";
     static string Status() {
         try {
@@ -29,7 +31,7 @@ class PortableLauncher {
             try { server=Process.GetProcessById(Int32.Parse(File.ReadAllText(pidFile))); }
             catch(ArgumentException) { return; }
             if (!String.Equals(server.MainModule.FileName,python,StringComparison.OrdinalIgnoreCase)) {
-                MessageBox.Show("当前运行的不是这份便携版，请从对应助手退出。","地宫领航"); return;
+                MessageBox.Show(L("当前运行的不是这份便携版，请从对应助手退出。", "A different copy is running. Close it using its own exit launcher."),L("地宫领航", "Aniimo Map Navigator")); return;
             }
             if (!Status().Contains("indexed")) return;
             var request=(HttpWebRequest)WebRequest.Create(Url+"/api/shutdown");
@@ -37,7 +39,7 @@ class PortableLauncher {
             using(var response=request.GetResponse()) {}
 #else
             if (!File.Exists(python) || !File.Exists(Path.Combine(app,"server.py")))
-                throw new Exception("文件不完整。请先解压整个压缩包，再双击启动助手。");
+                throw new Exception(L("文件不完整。请先解压整个压缩包，再双击启动助手。", "Files are missing. Extract the entire archive before starting the helper."));
             var status=Status();
             if (status.Contains("indexed") && status.Contains("version")) {
                 Process.Start(new ProcessStartInfo(Url){UseShellExecute=true}); return;
@@ -49,14 +51,14 @@ class PortableLauncher {
             info.EnvironmentVariables.Remove("ANIIMO_PORT");
             var process=Process.Start(info);
             for(int i=0;i<60;i++) {
-                if (process.HasExited) throw new Exception("助手未能启动。请检查 18731 端口是否被其他程序占用。");
+                if (process.HasExited) throw new Exception(L("助手未能启动。请检查 18731 端口是否被其他程序占用。", "Could not start. Check whether another application is using port 18731."));
                 if (Status().Contains("indexed")) {
                     Process.Start(new ProcessStartInfo(Url){UseShellExecute=true}); return;
                 }
                 Thread.Sleep(250);
             }
-            throw new Exception("启动较慢，请稍后重新双击启动助手。");
+            throw new Exception(L("启动较慢，请稍后重新双击启动助手。", "Startup is taking longer than expected. Try the launcher again shortly."));
 #endif
-        } catch(Exception e) { MessageBox.Show(e.Message,"地宫领航",MessageBoxButtons.OK,MessageBoxIcon.Information); }
+        } catch(Exception e) { MessageBox.Show(e.Message,L("地宫领航", "Aniimo Map Navigator"),MessageBoxButtons.OK,MessageBoxIcon.Information); }
     }
 }
