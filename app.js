@@ -184,3 +184,7 @@ function pointName(point){
  return t(category?.name||point.category)+' ('+point.name+')';
 }
 window.addEventListener('languagechange',()=>{draw();publishOverlay(true);});
+
+// Restore only supported intervals; storage may be unavailable in private mode.
+try { const saved=localStorage.getItem('aniimo-scan-interval'); if(['250','500','1000'].includes(saved)) $('interval').value=saved; } catch(e) {}
+$('interval').onchange=()=>{try {localStorage.setItem('aniimo-scan-interval',$('interval').value);} catch(e) {}};

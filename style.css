@@ -9,3 +9,5 @@
 
 /* English labels need flexible wrapping in the compact console. */
 .header-actions{flex-wrap:wrap}#language{font-size:12px;padding:7px 9px}html[lang=en] .brand strong{font-size:18px}html[lang=en] .capture-actions{flex-wrap:wrap}html[lang=en] .legend{flex-wrap:wrap}html[lang=en] .candidate-title{overflow-wrap:anywhere}html[lang=en] .header-actions .pill{font-size:11px}
+
+.scan-choice{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;font-size:12px}.scan-choice select{min-width:130px}.scan-help{font-size:11px;line-height:1.6;color:#91a6b3;margin:7px 0 0}

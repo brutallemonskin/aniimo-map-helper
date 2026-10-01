@@ -8,7 +8,7 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parent
 SOURCE_RUNTIME=Path(sys.executable).parent
-OUTPUT=ROOT/'portable'/'AniimoNavigator-Portable-v0.3.1'
+OUTPUT=ROOT/'portable'/'AniimoNavigator-Portable-v0.3.2'
 if OUTPUT.exists(): raise SystemExit('Output exists; choose a new version before rebuilding.')
 APP=OUTPUT/'app'; RUNTIME=OUTPUT/'runtime'
 APP.mkdir(parents=True); (RUNTIME/'Lib/site-packages').mkdir(parents=True)
@@ -29,7 +29,7 @@ for item in packages.iterdir():
 compiler=Path('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe')
 for output,defines in [('启动助手.exe',[]),('退出助手.exe',['/define:STOP'])]:
     subprocess.run([str(compiler),'/nologo','/target:winexe','/reference:System.Windows.Forms.dll','/out:'+str(OUTPUT/output),*defines,str(ROOT/'portable_launcher.cs')],check=True)
-(OUTPUT/'使用说明.txt').write_text('''伊莫 · 地宫领航 便携版 v0.3.1（Windows 10/11 x64）
+(OUTPUT/'使用说明.txt').write_text('''伊莫 · 地宫领航 便携版 v0.3.2（Windows 10/11 x64）
 
 可在右上角选择中文或 English，语言偏好自动保存。
 
@@ -42,7 +42,7 @@ for output,defines in [('启动助手.exe',[]),('退出助手.exe',['/define:STO
 7. 用完后双击“退出助手.exe”。仅关闭网页不会退出本地识别服务。
 
 整个文件夹均需保留；无需安装 Python、无需管理员权限、不写入开机启动。
-首次启动会索引 33 张地图，请等待“本地识别就绪”。默认读取间隔 0.25 秒，实际速度取决于机器。
+首次启动会索引 33 张地图，请等待“本地识别就绪”。可选择 0.25 秒、0.5 秒或 1 秒识别间隔，自动保存；默认 0.25 秒，实际速度取决于机器。
 海岛普通模式已有截图校准，小队海岛和不同分辨率仍需更多实测。
 图片在本机处理，不上传云端；日志和进程号可能写在 app 目录。
 这是未签名的测试版。如出现系统发布者提示，请先确认文件来源。
