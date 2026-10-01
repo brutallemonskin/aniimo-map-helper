@@ -2,11 +2,12 @@
 
 Coordinates are image pixels. No keyboard input or game process access is used.
 """
-import json, copy
+import json, copy, time
 from pathlib import Path
 from image_io import read_image
 import cv2
 import numpy as np
+from relocalizer import Relocalizer, motion_agrees
 
 
 class MinimapTracker:
@@ -14,6 +15,8 @@ class MinimapTracker:
         self.root=Path(root)
         self.refs={}
         self.last_matches={}
+        self.relocalizer=Relocalizer()
+        self.recovery={}
 
     @staticmethod
     def extract(image):
@@ -59,7 +62,7 @@ class MinimapTracker:
         dungeon_color=float(np.mean(hsv[:,:,1][interior]<55))>.72
         return gray,mask,point,dungeon_color
 
-    def match(self, sample, map_id=None, previous=None, previous_scale=None):
+    def match(self, sample, map_id=None, previous=None, previous_scale=None, observation=None, search_elapsed=0):
         missing={'status':'unknown','method':'minimap','candidates':[], 'position_source':None}
         if not map_id:
             return dict(missing,reason='已看到小地图，请先打开大地图确认本局地图。')
@@ -71,6 +74,7 @@ class MinimapTracker:
             same_start=np.allclose(previous,old_previous,rtol=0,atol=.001) and previous_scale==old_scale
             continuation=np.allclose(previous,row['position'],rtol=0,atol=.001) and previous_scale==row['minimap_scale']
             if (same_start or continuation) and np.array_equal(gray,old_gray) and np.array_equal(mask,old_mask) and np.array_equal(point,old_point):
+                if observation:self.recovery.pop((observation['session'],map_id),None)
                 return copy.deepcopy(answer)
         # Transparent HUD backgrounds inherit colors from the 3D scene.
         # Reject by terrain fit below, not by how gray the whole circle is.
@@ -86,11 +90,16 @@ class MinimapTracker:
         if previous is None:return dict(missing,reason='请打开大地图校准角色起点。')
         px,py=previous
         # A local search avoids jumping between repeated rooms across the map.
-        radius=230
+        # Only recovery verification expands its search with elapsed time;
+        # accepting the result still requires independent motion evidence.
+        step_limit=min(320,170+max(0,search_elapsed-500)*.04)
+        radius=max(230,step_limit+150)
+        if not search_elapsed:radius=230
         x0,y0=max(0,int(px-radius)),max(0,int(py-radius))
         x1,y1=min(ref.shape[1],int(px+radius)),min(ref.shape[0],int(py+radius))
         region=ref[y0:y1,x0:x1]
-        if min(region.shape[:2],default=0)<80:return dict(missing,reason='起点超出地图，请重新打开大地图校准。')
+        if min(region.shape[:2],default=0)<80:
+            return self.recover(sample,map_id,previous,previous_scale,observation,dict(missing,reason='起点超出地图，正在尝试重新定位。'))
         scales=np.linspace(.65,1.55,25) if previous_scale is None else np.linspace(previous_scale*.94,previous_scale*1.06,9)
         best=None;peaks=[]
         for scale in scales:
@@ -107,14 +116,54 @@ class MinimapTracker:
             lx,ly=loc;score[max(0,ly-35):ly+36,max(0,lx-35):lx+36]=-1
             _,v,_,other=cv2.minMaxLoc(score)
             peaks.append((v,(np.array(other)+point)/scale+[x0,y0]))
-        if best is None:return dict(missing,reason='小地图比例不匹配，请打开大地图校准。')
+        if best is None:return self.recover(sample,map_id,previous,previous_scale,observation,dict(missing,reason='小地图比例不匹配，正在尝试重新定位。'))
         value,pos,scale,loc=best
         alternative=max([v for v,p in peaks if np.linalg.norm(p-pos)>55],default=-1)
-        if value<.72 or value-alternative<.06 or np.linalg.norm(pos-previous)>170:
-            return dict(missing,reason='小地图地形暂不明确，位置已隐藏；可打开大地图重新校准。', fit=round(value,3))
+        if value<.72 or value-alternative<.06 or np.linalg.norm(pos-previous)>step_limit:
+            return self.recover(sample,map_id,previous,previous_scale,observation,dict(missing,reason='小地图地形暂不明确，保留上次位置；正在尝试重新定位。', fit=round(value,3)))
         origin=np.array(loc)/scale+[x0,y0]
         polygon=[(origin+np.array(p)/scale).tolist() for p in ((0,0),(200,0),(200,200),(0,200))]
         row={'id':map_id,'name':d['name'],'score':round(value*100,2),'inliers':0,'method':'minimap','position_source':'auto','position':pos.tolist(),'center':pos.tolist(),'polygon':polygon,'minimap_scale':scale}
         answer={'status':'matched','method':'minimap','position_source':'auto','candidates':[row], 'reason':'正在用小地图地形更新位置；打开大地图可重新校准。'}
         self.last_matches[map_id]=(gray.copy(),mask.copy(),point.copy(),list(previous),previous_scale,copy.deepcopy(answer))
+        if observation:self.recovery.pop((observation['session'],map_id),None)
         return answer
+
+    def recover(self,sample,map_id,previous,scale,observation,missing):
+        if observation is None:return missing
+        missing=dict(missing,recovering=True)
+        now=time.monotonic();key=(observation['session'],map_id)
+        state=self.recovery.setdefault(key,{'failures':0,'next':0,'pending':None})
+        if len(self.recovery)>8:self.recovery.pop(next(iter(self.recovery)))
+        state['failures']+=1
+        origin=(tuple(previous),scale)
+        pending=state['pending']
+        if pending and pending['origin']!=origin:state['pending']=None;pending=None
+        if pending:
+            age=observation['captured_at']-pending['at']
+            if 100<=age<=10000 and observation['sequence']>pending['sequence']:
+                checked=self.match(sample,map_id,pending['position'],pending['scale'],search_elapsed=age)
+                row=checked.get('candidates',[None])[0] if checked.get('candidates') else None
+                delta=np.array(row['position'])-pending['position'] if row else None
+                distance=np.linalg.norm(delta) if row else float('inf')
+                motion_limit=min(320,45+max(0,age-250)*.07)
+                coherent=distance<45 or (distance<motion_limit and motion_agrees(pending['sample'],sample,delta,(pending['scale']+row['minimap_scale'])/2))
+                if checked['status']=='matched' and coherent:
+                    self.recovery.pop(key,None)
+                    checked.update(relocalized=True,reason='已连续确认新位置，小地图追踪已恢复。')
+                    return checked
+                state['pending']=None
+            elif age>10000:state['pending']=None
+            else:return dict(missing,reason='已找到可能位置，等待下一帧确认。')
+        if state['failures']<2 or now<state['next']:return missing
+        state['next']=now+2
+        proposal=self.relocalizer.propose(sample,map_id,self.refs[map_id][1],scale if state['failures']<4 else None)
+        if proposal is None:return missing
+        position,new_scale=proposal
+        verified=self.match(sample,map_id,position,new_scale)
+        if verified['status']!='matched':return missing
+        row=verified['candidates'][0]
+        state['pending']={'position':row['position'],'scale':row['minimap_scale'],'origin':origin,
+                          'at':observation['captured_at'],'sequence':observation['sequence'],
+                          'sample':tuple(x.copy() if isinstance(x,np.ndarray) else x for x in sample)}
+        return dict(missing,reason='已找到可能位置，等待下一帧确认。')

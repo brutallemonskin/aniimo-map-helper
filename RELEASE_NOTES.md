@@ -1,3 +1,45 @@
+## v0.3.9 · 跑图路线、定位恢复与高清悬浮窗
+
+本版相较公开版 **v0.3.8** 汇总了近期本地测试版本的改进，正式版本号统一为 **v0.3.9**。本地 0.3.10～0.3.14 为开发测试编号，并非需要另外安装的前置版本。
+
+### 主要改动
+
+- **蛋巢遍历路线**：以当前已确认的位置为起点，规划经过所有未完成蛋巢的红色参考路线，标出访问顺序；无需返回起点。深蓝色记录实际确认走过的轨迹。走完的红线路段逐步消退，持续偏航后自动重新规划；手动标记已拾取后重算剩余路线，支持撤销。网页与悬浮窗同步。
+- **更稳妥的定位恢复**：补强刚进入地宫时的两门与地形对齐，减少部分蓝色队友标记干扰。小地图失去位置后限频搜索当前地图，连续确认后恢复；低频识别下较大的位移还需通过两帧地形运动校验。保留相似房间歧义检查，避免直接放宽阈值造成错误跳房间。
+- **自动性能档**：根据近期处理耗时和静止状态调整识别间隔；首次使用默认自动，已有手动选择保留。仍可选择 0.25、0.5、1、2、3 秒。定位状态区分已确认、保留位置、重新定位和关闭，并显示上次确认时间。
+- **采集卡帧与超时处理**：浏览器申请的采集帧率跟随识别间隔；没有新视频帧时保留位置，恢复后继续。识别请求超时后自动重试，服务端不堆积识别任务。
+- **本地采集（试用）**：新增 Windows Graphics Capture 方式，手动选择游戏窗口后即可连接，无需浏览器屏幕共享。画面直接交给本机识别，网页只接收结果及小预览，减少浏览器图片编码与传输；原有分享方式仍保留。
+- **高清悬浮窗**：底图保留原始像素，最长边上限 2048，并按悬浮窗实际像素绘制，改善放大后的模糊。人物移动只更新坐标和路线，静态底图与缩放结果复用缓存，未变化画面跳过重绘；图标大小与筛选继续同步。
+- **交互与启动修复**：补上悬浮窗拖动、缩放中断或隐藏、关闭时的鼠标捕获释放保护；启动器检测到其他版本运行时提示切换，避免新页面误连旧服务。
+
+### 下载与使用
+
+下载 **AniimoNavigator-Portable-v0.3.9.zip**，Windows 10/11 x64 免安装，无需安装 Python。附带 SHA-256 校验文件。
+
+1. 先退出旧版助手，将新 ZIP 完整解压到新的可写文件夹，不要覆盖正在运行的目录。
+2. 双击 **启动助手.exe**，建议使用 Chrome / Edge。
+3. 选择“选择游戏窗口”，或尝试“本地采集（试用）”并手动连接游戏窗口。
+4. 进入地宫后打开一次大地图校准，再关闭大地图继续定位；需要时开启“游戏悬浮窗”。
+
+已有浏览器偏好会保留，不会自动清空玩家设置。使用本地 0.3.14 测试版的用户也按以上步骤切换到正式 0.3.9。
+
+### 验证与边界
+
+- 发布前使用已有游戏截图、移动回放、低频识别模拟、路线与界面回归、独立 Windows 窗口采集，以及中文路径下的完整免安装包验证。源码和发布包不包含开发测试、测试截图、个人设置或诊断日志。
+- 路线仅依据可确认连通的底图网格，未接入高台图层，不校验门锁、机关及高低差；无法确认连通的蛋巢会提示。经过附近不会自动算作拾取。
+- 轨迹和拾取记录只属于当前页面会话，新一局、重新共享或刷新会清空。地图遮挡、无新帧或定位不确定时保留最后位置，不代表角色仍在原地。
+- 本地采集仍映射整个窗口，识别主要使用 CPU；实际收益取决于 Windows、显卡驱动及机器配置。不兼容时可改回浏览器分享。高清缓存会增加部分内存占用，清晰度仍受原图素材限制。
+- 本版未完成不同配置电脑的真实游戏全屏复测，不能承诺解决所有定位中断、白屏或快捷键反馈。截图仅在本机处理，不上传云端。
+
+### English
+
+Public v0.3.9 consolidates the local trials through 0.3.14. Compared with v0.3.8, it adds an egg-nest tour (red), confirmed travel history (dark blue), route progress and deviation recovery, automatic scan pacing, clearer tracking status, guarded minimap relocalization, capture-stall and timeout recovery, optional native Windows capture, and a high-resolution cached overlay. It also adds interrupted-drag capture-release protection and a launcher version-switch prompt.
+
+Extract the full ZIP into a new folder, exit the previous helper, and run **启动助手.exe**. Reopen the full game map once to calibrate. Native capture remains experimental; real fullscreen compatibility and performance vary by hardware. Routes use the available atlas and do not account for upper floors, locks or mechanisms. Development tests, personal settings, screenshots and logs are excluded from the release.
+
+
+---
+
 ## v0.3.8 · 小地图性能优化与悬浮窗更新
 
 ### 更新内容

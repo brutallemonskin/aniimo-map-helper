@@ -37,6 +37,10 @@ class DoorMatcher:
         bs=[(s,c) for s,c in bs if not (c[0]<w*.2 and c[1]<h*.2)]
         ys=[(s,c) for s,c in ys if s[2]<w*.12 and s[3]<h*.15]
         bs=[(s,c) for s,c in bs if s[2]<w*.1 and s[3]<h*.12]
+        # Team labels and shrine symbols may share the portal's blue hue.
+        # A gate has a tall, fairly solid color core; keep ambiguity if several do.
+        if len(bs)>1:
+            bs=[(s,c) for s,c in bs if s[2]/s[3]<.95 and s[4]/(s[2]*s[3])>.55]
         orange=cv2.inRange(hsv,(5,90,180),(21,255,255))
         # White details can split one orange gate into disconnected color bands.
         # Close gaps at the normalized icon scale before counting gates.
@@ -100,6 +104,38 @@ class DoorMatcher:
             poly=project([[x0,y0],[x1,y0],[x1,y1],[x0,y1]])
             pos=project([[anchor[0]*w,anchor[1]*h]])[0] if anchor else None
             rows.append({'id':d['id'],'name':d['name'],'score':round(score*100,2),'inliers':0,'coverage':round(len(qx)/(w*h),4),'polygon':poly,'position':pos,'center':project([[(x0+x1)/2,(y0+y1)/2]])[0],'method':'doors','edge_fit':round(score,3),'angle':round(angle,2)})
+        # A sparse entrance needs a north-up refinement: an arrow covering the
+        # gate shifts its color centroid and must not rotate the entire map.
+        # References come from our existing map atlas, not labelled test captures.
+        rows.sort(key=lambda r:r['score'],reverse=True)
+        if rows and rows[0]['score']<70 and cv2.countNonZero(floor)<w*h*.025:
+            lookup={d['id']:(d,pins,ref) for d,pins,ref in self.refs}
+            for row in rows[:5]:
+                if abs(row['angle'])>4:continue
+                d,pins,ref=lookup[row['id']]
+                u=pins[1]-pins[0];v=cb-cy
+                estimate=float(np.dot(u,v)/np.dot(u,u))
+                best=None
+                # Search scale and translation within bounded icon uncertainty.
+                for factor in (.97,.985,1.,1.015,1.03):
+                    A=np.eye(2)*estimate*factor;t=cb-A@pins[1]
+                    for dx in (-6,0,6):
+                        for dy in (-6,0,6):
+                            shift=np.float64([dx,dy]);M=np.column_stack([A,t+shift-[x0,y0]])
+                            warped=cv2.warpAffine(ref,M,(x1-x0,y1-y0))
+                            re=cv2.Canny(warped,35,85);rd=cv2.distanceTransform(255-re,cv2.DIST_L2,3)
+                            forward=float(np.mean(np.exp(-rd[qy,qx]/2.5)))
+                            ry,rx=np.where((re>0)&(vm>0))
+                            backward=float(np.mean(np.exp(-qdist[ry,rx]/2.5))) if len(rx) else 0
+                            score=2*forward*backward/max(.001,forward+backward)
+                            if best is None or score>best[0]:best=(score,A,t+shift)
+                if best and best[0]*100>row['score']:
+                    score,A,t=best;inv=np.linalg.inv(A)
+                    def project(points):return ((np.float64(points)-t)@inv.T).tolist()
+                    row.update(score=round(score*100,2),edge_fit=round(score,3),angle=0.,
+                               polygon=project([[x0,y0],[x1,y0],[x1,y1],[x0,y1]]),
+                               position=project([[anchor[0]*w,anchor[1]*h]])[0] if anchor else None,
+                               center=project([[(x0+x1)/2,(y0+y1)/2]])[0])
         rows.sort(key=lambda r:r['score'],reverse=True)
         if not rows:return None
         best=rows[0];margin=best['score']-(rows[1]['score'] if len(rows)>1 else 0)

@@ -13,3 +13,6 @@
 Map marker artwork: original image files referenced by Wikily Aniimo maps, downloaded unchanged. Per-asset URLs and SHA-256 checksums are in app/data/icons/manifest.json (data/icons/manifest.json in source). Artwork remains the property of its rights holders.
 
 Additional original marker/species artwork is sourced from AniimoTools (https://aniimotools.dev/map/lost-sanctum/) and the official Aniimo wiki (https://wiki.yimo.com/item/070/basic-form). Exact source URLs and checksums are retained in data/icons/manifest.json. These assets remain subject to their respective rights holders.
+
+## Windows Capture 2.0.1
+Native capture uses the MIT-licensed windows-capture Python distribution by NiiightmareXD. Source: https://github.com/NiiightmareXD/windows-capture . Its license is retained in runtime/Lib/site-packages/windows_capture-2.0.1.dist-info/licenses/LICENCE.

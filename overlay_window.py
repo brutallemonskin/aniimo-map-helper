@@ -10,6 +10,7 @@ import os
 import threading
 import time
 import urllib.request
+import urllib.parse
 from functools import lru_cache
 from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
@@ -39,7 +40,7 @@ def hit_edges(x,y,w,h):
     return ('l' if x<12 else 'r' if x>=w-12 else '')+('t' if y<8 else 'b' if y>=h-12 else '')
 
 
-def crop_map(source):
+def crop_bounds(source):
     source = source.convert('RGBA')
     # The browser frame includes both transparent padding and opaque black atlas margins.
     r, g, b, alpha = source.split()
@@ -47,8 +48,12 @@ def crop_map(source):
     bounds = visible.point(lambda v: 255 if v > 38 else 0).getbbox()
     if bounds:
         left, top, right, bottom = bounds
-        source = source.crop((max(0,left-2),max(0,top-2),min(source.width,right+2),min(source.height,bottom+2)))
-    return source
+        return (max(0,left-2),max(0,top-2),min(source.width,right+2),min(source.height,bottom+2))
+    return (0,0,source.width,source.height)
+
+
+def crop_map(source):
+    return source.convert('RGBA').crop(crop_bounds(source))
 
 
 def fit_map(source, size):
@@ -56,15 +61,76 @@ def fit_map(source, size):
 
 
 @lru_cache(maxsize=2)
-def prepared_map(raw):
+def prepared_layers(raw):
     with Image.open(io.BytesIO(base64.b64decode(raw))) as source:
-        source = crop_map(source)
-    height = max(1, round(WIDTH * source.height / source.width))
-    return source.resize((WIDTH, height), Image.Resampling.LANCZOS)
+        original=source.size;bounds=crop_bounds(source);source=source.convert('RGBA').crop(bounds)
+    return source,bounds,original
+
+
+@lru_cache(maxsize=3)
+def prepared_map(raw, width=WIDTH, height=None):
+    source=prepared_layers(raw)[0]
+    height=height if height is not None else max(1,round(width*source.height/source.width))
+    return source.resize((width,height),Image.Resampling.LANCZOS)
+
+
+@lru_cache(maxsize=3)
+def translucent_map(raw,width,height,opacity):
+    source=prepared_map(raw,width,height).copy()
+    source.putalpha(source.getchannel('A').point(lambda a:a*opacity//255))
+    return source
+
+
+def paint_navigation(source,state):
+    nav=state.get('navigation')
+    if not nav:return
+    _,(left,top,right,bottom),(ow,oh)=prepared_layers(state['image'])
+    sx,sy=source.width/(right-left),source.height/(bottom-top)
+    def project(p):return ((p[0]*ow-left)*sx,(p[1]*oh-top)*sy)
+    ink=sx*max(1,max(ow,oh)/700)
+    layer=Image.new('RGBA',source.size);draw=ImageDraw.Draw(layer);previous=None
+    path=[project(p) for p in nav.get('path',[])]
+    if len(path)>1:draw.line(path,fill=(168,50,56,153) if nav['held'] else (214,56,64,255),width=max(2,round(3*ink)))
+    for p in nav.get('trail',[]):
+        if p is None:previous=None;continue
+        p=project(p)
+        if previous:draw.line([previous,p],fill=(36,89,189,221),width=max(3,round(5*ink)))
+        previous=p
+    font=ImageFont.truetype(FONT_PATH,max(8,round(11*ink)))
+    for i,p in enumerate(nav.get('stops',[]),1):
+        x,y=project(p);x+=12*ink;y-=12*ink;r=max(6,8*ink)
+        draw.ellipse((x-r,y-r,x+r,y+r),fill=(186,37,47,255))
+        draw.text((x,y),str(i),font=font,fill='white',anchor='mm')
+
+    source.alpha_composite(layer)
+
+
+def paint_player(source,state):
+    player=state.get('player')
+    if not player:return
+    _,(left,top,right,bottom),(ow,oh)=prepared_layers(state['image'])
+    sx,sy=source.width/(right-left),source.height/(bottom-top)
+    def project(p):return ((p[0]*ow-left)*sx,(p[1]*oh-top)*sy)
+    ink=sx*max(1,max(ow,oh)/700)
+    poly=player.get('polygon',[])
+    if len(poly)>=3:
+        layer=Image.new('RGBA',source.size);outline=ImageDraw.Draw(layer)
+        poly=[project(p) for p in poly]
+        outline.polygon(poly,fill=(88,234,210,19));outline.line(poly+[poly[0]],fill=(88,234,210,255),width=max(1,round(2*ink)))
+        source.alpha_composite(layer)
+    d=ImageDraw.Draw(source)
+    x,y=project([player['x'],player['y']]);r=max(3,9*ink)
+    if not(-r<=x<=source.width+r and -r<=y<=source.height+r):return
+    color='#e6b75b' if player['held'] else '#ff7188'
+    d.ellipse((x-r,y-r,x+r,y+r),fill=color,outline='white',width=max(1,round(2*ink)))
+    font=ImageFont.truetype(FONT_PATH,max(8,round(12*ink)))
+    d.text((x+14*ink,y-6*ink),player['label'],font=font,fill='white',stroke_width=max(1,round(2*ink)),stroke_fill='#111b29')
 
 
 def layout_height(state):
-    return BAR + 28 + prepared_map(state['image']).height if state.get('image') else HEIGHT
+    if not state.get('image'):return HEIGHT
+    source=prepared_layers(state['image'])[0]
+    return BAR+28+max(1,round(WIDTH*source.height/source.width))
 
 
 def window_size(width, height, screen_width, screen_height):
@@ -74,40 +140,44 @@ def window_size(width, height, screen_width, screen_height):
     return width, round(width*height/WIDTH), maximum
 
 
-def render(state, opacity=190, locked=False, hotkeys=True):
-    en = state.get('language') == 'en'
-    height = layout_height(state)
-    image = Image.new('RGBA', (WIDTH, height), (9, 18, 25, opacity))
-    draw = ImageDraw.Draw(image)
-    font = ImageFont.truetype(FONT_PATH, 14)
-    small = ImageFont.truetype(FONT_PATH, 12)
-    draw.rectangle((0, 0, WIDTH, BAR), fill=(17, 32, 39, 235))
-    title = state.get('title', 'Waiting for dungeon' if en else '等待识别地宫')
-    if state.get('image') and state.get('updated') and time.time() - state['updated'] > 4:
-        title = 'Paused · Last position' if en else '画面暂停 · 上次位置'
-    while draw.textlength(title, font=font) > WIDTH-175 and title:
-        title=title[:-1]
-    draw.text((12, 9), title, font=font, fill='#e4f4ef')
-    for x, text in [(WIDTH-148, '−'), (WIDTH-117, '+'), (WIDTH-87, 'Lock' if en else '穿透'), (WIDTH-29, '×')]:
-        draw.text((x, 8), text, font=font, fill='#86e4c4')
-    raw = state.get('image')
+def render(state, opacity=190, locked=False, hotkeys=True, width=WIDTH, height=None):
+    en=state.get('language')=='en'
+    scale=width/WIDTH
+    height=height or round(layout_height(state)*scale)
+    bar=round(BAR*scale);footer=round(28*scale)
+    image=Image.new('RGBA',(width,height),(9,18,25,opacity))
+    draw=ImageDraw.Draw(image)
+    font=ImageFont.truetype(FONT_PATH,max(1,round(14*scale)))
+    small=ImageFont.truetype(FONT_PATH,max(1,round(12*scale)))
+    draw.rectangle((0,0,width,bar),fill=(17,32,39,235))
+    title=state.get('title','Waiting for dungeon' if en else '等待识别地宫')
+    if state.get('image') and state.get('updated') and time.time()-state['updated']>4:
+        title='Paused · Last position' if en else '画面暂停 · 上次位置'
+    while draw.textlength(title,font=font)>(WIDTH-175)*scale and title:title=title[:-1]
+    draw.text((12*scale,9*scale),title,font=font,fill='#e4f4ef')
+    for x,text in [(WIDTH-148,'−'),(WIDTH-117,'+'),(WIDTH-87,'Lock' if en else '穿透'),(WIDTH-29,'×')]:
+        draw.text((x*scale,8*scale),text,font=font,fill='#86e4c4')
+    raw=state.get('image')
     if raw:
-        source = prepared_map(raw).copy()
-        # Uniform translucency preserves the contrast of the map and its icons.
-        source.putalpha(source.getchannel('A').point(lambda a: a * opacity // 255))
-        image.paste(source, (0, BAR))
+        # Resize the original map directly to physical pixels, once per size.
+        source=translucent_map(raw,width,max(1,height-bar-footer),opacity).copy()
+        # Dynamic graphics are rendered at the same physical resolution.
+        paint_navigation(source,state)
+        paint_player(source,state)
+        # Apply the same opacity to dynamic marks as to the cached base.
+        source.putalpha(source.getchannel('A').point(lambda a:min(a,opacity)))
+        image.paste(source,(0,bar))
     else:
-        draw.text((90, 174), ('Open the full game map to begin' if en else '打开游戏大地图，识别后自动显示'), font=font, fill='#d1e1e3')
-        draw.text((98, 207), ('Keep the helper and screen sharing open' if en else '请保持助手页面和窗口共享开启'), font=small, fill='#9db1ba')
-    hint = 'Alt+Shift+M 解锁调整' if locked else '标题栏移动 · 拖动边角缩放'
-    hint += ' · Alt+Shift+H 隐藏' if hotkeys else ' · 快捷键被占用，穿透未开启'
+        draw.text((90*scale,174*scale),('Open the full game map to begin' if en else '打开游戏大地图，识别后自动显示'),font=font,fill='#d1e1e3')
+        draw.text((98*scale,207*scale),('Keep the helper and capture running' if en else '请保持助手页面和画面读取开启'),font=small,fill='#9db1ba')
+    hint='Alt+Shift+M 解锁调整' if locked else '标题栏移动 · 拖动边角缩放'
+    hint+=' · Alt+Shift+H 隐藏' if hotkeys else ' · 快捷键被占用，穿透未开启'
     if en:
-        hint = 'Alt+Shift+M: unlock' if locked else 'Drag title: move / edges: resize'
-        hint += ' | Alt+Shift+H: hide' if hotkeys else ' | Hotkeys unavailable'
-    draw.text((10, height-24), hint, font=small, fill='#b1d7cb')
+        hint='Alt+Shift+M: unlock' if locked else 'Drag title: move / edges: resize'
+        hint+=' | Alt+Shift+H: hide' if hotkeys else ' | Hotkeys unavailable'
+    draw.text((10*scale,height-24*scale),hint,font=small,fill='#b1d7cb')
     if not locked:
-        for offset in (7,12,17):
-            draw.line((WIDTH-offset,height-4,WIDTH-4,height-offset),fill='#86e4c4',width=1)
+        for offset in (7,12,17):draw.line(((WIDTH-offset)*scale,height-4*scale,(WIDTH-4)*scale,height-offset*scale),fill='#86e4c4',width=max(1,round(scale)))
     return image
 
 
@@ -149,6 +219,8 @@ def main(smoke=False):
     api(user, 'LoadCursorW', W.HANDLE, [W.HINSTANCE, W.LPVOID])
     api(user, 'SetCursor', W.HANDLE, [W.HANDLE])
     api(user, 'SetCapture', W.HWND, [W.HWND])
+    api(user, 'GetCapture', W.HWND, [])
+    api(user, 'GetAsyncKeyState', C.c_short, [C.c_int])
     api(user, 'ReleaseCapture', W.BOOL, [])
     api(user, 'DestroyWindow', W.BOOL, [W.HWND])
     api(user, 'ShowWindow', W.BOOL, [W.HWND, C.c_int])
@@ -196,8 +268,14 @@ def main(smoke=False):
             temporary.replace(SETTINGS)
         except OSError:pass
 
+    last_paint=None
     def paint():
-        im = render(state, opacity, locked, hotkeys).resize((window_width, window_height), Image.Resampling.LANCZOS)
+        nonlocal last_paint
+        stamp=(state.get('version'),state.get('map_key'),state.get('title'),state.get('language'),
+               bool(state.get('updated') and time.time()-state['updated']>4),
+               opacity,locked,hotkeys,window_width,window_height)
+        if stamp==last_paint:return
+        im = render(state, opacity, locked, hotkeys, width=window_width, height=window_height)
         # Layered windows require premultiplied BGRA pixels.
         pixels = im.convert('RGBa').tobytes('raw', 'BGRa')
         dc = user.GetDC(None)
@@ -214,12 +292,28 @@ def main(smoke=False):
             rect = W.RECT(); user.GetWindowRect(hwnd, C.byref(rect))
             ok = user.UpdateLayeredWindow(hwnd, dc, C.byref(W.POINT(rect.left, rect.top)), C.byref(W.SIZE(window_width, window_height)), mem, C.byref(W.POINT(0, 0)), 0, C.byref(BLEND(0, 0, 255, 1)), 2)
             if not ok: raise C.WinError(C.get_last_error())
+            last_paint=stamp
         finally:
             gdi.SelectObject(mem, old); gdi.DeleteObject(bmp); gdi.DeleteDC(mem); user.ReleaseDC(None, dc)
+
+    def end_drag(release=True):
+        nonlocal drag
+        was_dragging=drag is not None
+        drag=None  # ReleaseCapture can synchronously send WM_CAPTURECHANGED.
+        if release and user.GetCapture()==hwnd:user.ReleaseCapture()
+        if was_dragging:save_settings()
+
+    def check_drag():
+        # A background non-activating overlay can miss mouse-up outside its bounds.
+        # Query only the physical primary mouse button, including swapped buttons.
+        if drag is not None:
+            button=0x02 if user.GetSystemMetrics(23) else 0x01
+            if user.GetCapture()!=hwnd or not (user.GetAsyncKeyState(button)&0x8000):end_drag()
 
     def toggle_lock():
         nonlocal locked
         if not hotkeys: return
+        end_drag()
         locked = not locked
         style = user.GetWindowLongPtrW(hwnd, -20)
         user.SetWindowLongPtrW(hwnd, -20, style | 0x20 if locked else style & ~0x20)
@@ -250,6 +344,9 @@ def main(smoke=False):
                         drag = ('move',p.x,p.y,(r.left,r.top,window_width,window_height)); user.SetCapture(handle)
                 return 0
             if msg == 0x200 and drag:
+                if not (wp&1):end_drag();return 0
+                check_drag()
+                if drag is None:return 0
                 p = W.POINT(); user.GetCursorPos(C.byref(p))
                 edges,sx,sy,rect=drag
                 if edges=='move':
@@ -263,17 +360,18 @@ def main(smoke=False):
                 edges=hit_edges(p.x-r.left,p.y-r.top,window_width,window_height)
                 cursor=32642 if edges in ('lt','rb') else 32643 if edges in ('rt','lb') else 32644 if edges in ('l','r') else 32645 if edges in ('t','b') else 32512
                 user.SetCursor(user.LoadCursorW(None,C.c_void_p(cursor)));return 1
-            if msg in (0x202, 0x215):
-                if drag:drag=None;save_settings()
-                if msg==0x202:user.ReleaseCapture()
+            if msg in (0x202, 0x215, 0x1F):  # Mouse-up, capture changed, cancel mode.
+                end_drag(release=msg!=0x215)
                 return 0
             if msg == 0x312:
                 if wp == 1: toggle_lock()
                 if wp == 2:
+                    end_drag()
                     hidden = not hidden; user.ShowWindow(handle, 0 if hidden else 4)
                 return 0
             if msg == 0x113:
                 if smoke: user.DestroyWindow(handle); return 0
+                check_drag()
                 if not drag:
                     try: state = updates.get_nowait()
                     except queue.Empty: pass
@@ -289,8 +387,10 @@ def main(smoke=False):
                 if not hidden: paint()
                 return 0
             if msg == 2:
+                end_drag()
                 save_settings();finished.set(); user.PostQuitMessage(0); return 0
         except Exception:
+            end_drag()
             import traceback; traceback.print_exc()
         return user.DefWindowProcW(handle, msg, wp, lp)
 
@@ -318,10 +418,14 @@ def main(smoke=False):
             toggle_lock(); assert not user.GetWindowLongPtrW(hwnd, -20) & 0x20
 
     def poll():
+        cached={}
         while not finished.is_set():
             try:
-                with urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('ANIIMO_PORT','18731')+'/api/overlay/frame', timeout=2) as reply:
+                query=urllib.parse.urlencode({'image_key':cached.get('map_key','')})
+                with urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('ANIIMO_PORT','18731')+'/api/overlay/frame?'+query, timeout=2) as reply:
                     value = json.load(reply)
+                if value.pop('image_unchanged',False):value['image']=cached.get('image')
+                cached=value
             except Exception:
                 value = {'title': 'Helper disconnected' if state.get('language') == 'en' else '助手连接中断 · 请检查本地页面', 'language': state.get('language','zh-CN'), 'image': None}
             try: updates.get_nowait()
@@ -336,6 +440,7 @@ def main(smoke=False):
         code = user.GetMessageW(C.byref(message), None, 0, 0)
         if code <= 0: break
         user.TranslateMessage(C.byref(message)); user.DispatchMessageW(C.byref(message))
+    end_drag()
     user.UnregisterHotKey(hwnd, 1); user.UnregisterHotKey(hwnd, 2)
     if smoke: print('PASS: native layered/topmost/non-activating window, paint, click-through style, close')
 

@@ -1,3 +1,5 @@
+**[Download v0.3.9](https://github.com/brutallemonskin/aniimo-map-helper/releases/tag/v0.3.9).** This public release consolidates local trials through 0.3.14 under public version 0.3.9.
+
 # Aniimo Map Navigator
 
 A local map companion for Aniimo's Egg Heist mode on Windows 10/11 x64.
@@ -7,7 +9,7 @@ A local map companion for Aniimo's Egg Heist mode on Windows 10/11 x64.
 1. Extract the complete portable ZIP into a writable folder.
 2. Double-click **启动助手.exe** (Start helper). No Python installation is required.
 3. Open the helper in Chrome or Edge. Choose **English** in the top-right language menu.
-4. Click **Select game window** and share the full game window.
+4. Click **Select game window** to share the game, or use **Local capture (trial)** to select and connect to the game window.
 5. Enter a dungeon and open the full game map to identify the map and calibrate your position.
 6. Close the game map to continue tracking from the minimap. Keep the helper and screen sharing running.
 7. Use **Game overlay** to display the translucent map over the game.
@@ -24,7 +26,7 @@ The language menu switches instantly without resetting the current map or player
 
 ## Features and limits
 
-Includes 33 maps, map matching, automatic map switching, minimap position tracking, yellow-arrow and blue/white star-pattern egg recognition, island region views and marker filters. Choose a 0.25s, 0.5s, 1s, 2s or 3s scan interval; your choice is saved. The default is 0.25s. Unchanged minimap results are reused, egg detection searches smaller candidate regions, uniform frames are skipped early, and slow scans leave idle time. Processing time depends on hardware.
+Includes 33 maps, map matching, automatic map switching, minimap position tracking, yellow-arrow and blue/white star-pattern egg recognition, island region views and marker filters. Choose a 0.25s, 0.5s, 1s, 2s or 3s scan interval; your choice is saved. First use defaults to Automatic performance; existing manual settings are retained. Unchanged minimap results are reused, egg detection searches smaller candidate regions, uniform frames are skipped early, and slow scans leave idle time. Processing time depends on hardware.
 
 When the map is obscured or cannot be matched, the helper keeps the last known position. This is not a guarantee that the player has remained stationary. Reopen the full game map to recalibrate if tracking drifts.
 
@@ -79,3 +81,27 @@ Category visibility choices persist across recognition, map changes, manual conf
 Blue-door and gold/purple/blue key-room markers come from AniimoTools. Rockling artwork comes from the official Aniimo wiki. Other maps and artwork come from Wikily. Downloaded asset bytes are unchanged; source URLs and SHA-256 hashes are recorded in data/icons/manifest.json.
 
 Creature markers use matching base-species artwork, not dark-variant artwork. Assets load only when their category is enabled and are cached as 64px thumbnails. Saved visibility applies to both the web map and overlay.
+
+## Trial changes
+
+Improved sparse entrance alignment and blue-marker filtering. Failed minimap tracking now tries a throttled search on the current map and resumes only after confirmation across frames. Static map layers are cached; player movement sends coordinates to the overlay. Filters, icon size and map changes still refresh the base layer. Ambiguous terrain retains the last position.
+
+## New expedition trial
+
+The Automatic performance option adapts the scan interval using processing time and confirmed movement; manual intervals remain available. This estimates load, not CPU utilization. Position state and age are shown explicitly.
+
+Optional red tours visit all unfinished egg nests along confirmed atlas passages, starting at your position without returning. Numbers indicate stop order; deep blue shows the traveled trail. Marker visibility does not filter the tour. Current atlas sizes use an exact shortest open tour; disconnected nests are explicitly counted. Locks, elevation and mechanisms must be checked in game; outdoor routing is not supported. Click markers to confirm collection; collection replans the remaining tour and supports undo. Traveled red segments disappear while blue trails remain. Sustained deviations trigger replanning with a 10-second minimum cooldown; lost positions and jumps do not erase unobserved segments. Trails contain at most 600 recent confirmed points. New runs, new capture sessions and reloads clear expedition data.
+
+Validated with existing screenshots, movement replay, simulated slow processing and UI/package regression checks; no new live-game validation yet. Test assets are excluded from the portable package.
+
+## v0.3.9 overlay and route fixes
+
+Overlay mouse capture is released after interrupted dragging/resizing, missed mouse-up, hiding and closing. Simulated input regression passes; the reported Alt+Tab / Windows-key symptom still needs validation on affected hardware. Route progression and debounced deviation replanning are included. Nest collection remains manual; upper-floor support is deferred.
+
+## Capture reliability and native capture (v0.3.9)
+Browser capture requests follow the recognition interval (8/4/2/1/1 fps). New video frame counters distinguish a stalled stream from a stationary character; 15-second match timeouts retry without queuing inference jobs. Moving recovery requires terrain agreement and, for larger steps, independent inter-frame motion evidence.
+Choose **Local capture (trial)** and explicitly select the game window to use Windows Graphics Capture. Raw images go directly to the local matcher; the page receives results and a small preview at most once per second. The binding still maps the full window, so this is not GPU-only region capture and no performance gain is guaranteed. If the OS or driver does not support the requested native settings, use browser sharing. Native polling is paced by the server rather than background browser timers. Keep the page running; closing, freezing or discarding the tab releases capture after about 20 seconds.
+Validated with an owned Windows window replaying game screenshots, including full-map to minimap transitions and DPI cropping. Live game fullscreen, different GPUs and low-end machines still need field testing.
+
+## High-resolution overlay
+Preserves the original map pixels up to a 2048px longest edge and renders directly at the physical window size. Marker display scale and filter synchronization are preserved. Cached map resizing and unchanged-frame skipping reduce repeated work; player movement still uses coordinate-only updates. Capture and recognition rates do not increase. Higher-resolution caches use some additional memory. Original asset detail remains the limit.

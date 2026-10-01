@@ -3,6 +3,81 @@ let catalog=[], current=null, bitmap=null, zoom=1, ox=0, oy=0, enabled=new Set()
 let stream=null, frame=null, busy=false, timer=null, running=false, history=[], lastSignature=null, generation=0;
 let tracking=null, trackedAt=0, lastKnown=null;
 let captureKind='full',lastFullFrameAt=-Infinity,lastCaptureSize='';
+let observationSession=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),observationSequence=0;
+const cadence=new NavigatorTools.AdaptiveCadence(),journal=new NavigatorTools.RunJournal(),routeFollower=new NavigatorTools.RouteFollower();
+let recoveryActive=false,navEnabled=false,navTarget=null,selectedPoint=null,navPath=[],navRequest=0,navBusy=false,navAt=0,navOrigin=null,navMessage='',navStops=[],navUnreachable=[];
+function writeText(id,value){const el=$(id);if(el.textContent!==value)el.textContent=value;}
+function effectiveInterval(){return $('interval').value==='auto'?cadence.interval:Number($('interval').value)||250;}
+function resetNavigation(){routeFollower.reset();journal.reset();cadence.reset();navRequest++;navTarget=null;selectedPoint=null;navPath=[];navStops=[];navUnreachable=[];navOrigin=null;navAt=0;navMessage='';recoveryActive=false;}
+function syncQuality(){
+ const active=result?.position&&result.id===current?.id&&!result.held;
+ const state=!realtimeTracking?'off':active?'tracking':lastKnown?(recoveryActive?'recovering':'held'):'uncalibrated';
+ const labels={off:'定位已关闭',tracking:'位置已确认',held:'保留上次位置',recovering:'正在重新定位',uncalibrated:'等待地图校准'};
+ const el=$('tracking-quality');writeText('tracking-quality',t(labels[state]));if(el.getAttribute?.('data-state')!==state)el.setAttribute('data-state',state);
+ writeText('quality-detail',state==='tracking'?t('仅根据已确认画面更新位置'):lastKnown?t('距上次确认')+' '+Math.max(0,Math.floor((Date.now()-trackedAt)/1000))+' s':t('打开游戏大地图以确认本局起点'));
+ writeText('performance-status',($('interval').value==='auto'?t('自动调节')+': '+(effectiveInterval()/1000)+' s · ':t('手动间隔')+' · ')+t('最近处理耗时')+' '+Math.round(cadence.cost)+' ms');
+}
+function clearRoute(message=''){routeFollower.reset();navRequest++;navTarget=null;navPath=[];navStops=[];navUnreachable=[];navOrigin=null;navAt=0;navMessage=message;}
+function selectableTargets(){
+ if(!current)return [];
+ return (current.displayPoints||current.points).filter(p=>p.category==='egg-nests'&&!journal.picked(current.id,p));
+}
+async function updateRoute(force=false){
+ if(!navEnabled||navBusy||!current?.id.startsWith('sanctum-')||!result?.position||result.id!==current.id||result.held)return;
+ const now=Date.now(),position=[...result.position];
+ if(!force&&now-navAt<2000)return;
+ const reroute=!!navOrigin;
+ if(!force&&reroute&&!routeFollower.shouldReplan(position,now))return;
+ const targets=selectableTargets();
+ if(!targets.length){navMessage='本图蛋巢已全部完成或暂无蛋巢';navPath=[];navStops=[];navTarget=null;navOrigin=position;renderNavigation();return;}
+ navBusy=true;navAt=now;routeFollower.attempt(position,now);const token=++navRequest,map=current.id,run=generation;
+ navMessage=reroute?'已确认偏航，正在重新规划':'正在计算参考路线';renderNavigation();
+ try{
+   const response=await fetch('/api/route',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({map,position,mode:'egg-tour',targets:targets.map(p=>({key:NavigatorTools.pointKey(p),position:[p.x,p.y]}))})});
+  const out=await response.json();if(!response.ok)throw Error(out.error||'路线暂不可用');
+  if(token!==navRequest||run!==generation||map!==current?.id||!navEnabled||result?.held)return;
+  navOrigin=position;routeFollower.set(out.status==='ok'?out.path:[],position,Date.now());
+  if(result?.position)routeFollower.observe(result.position,Date.now());navPath=routeFollower.remaining();navStops=out.stops||[];navUnreachable=out.unreachable||[];
+  navMessage=out.status==='ok'?(out.exact?'底图最短遍历路线':'底图优化遍历路线'):out.reason;
+  navTarget=out.status==='ok'?targets.find(p=>NavigatorTools.pointKey(p)===out.target)||null:null;
+ }catch(e){if(token===navRequest){navOrigin=position;navMessage='路线暂不可用，请稍后重试';}}
+ finally{navBusy=false;draw();}
+}
+function renderNavigation(){
+ const data=current?journal.map(current.id):{picked:new Map()},picked=data.picked.size;
+ const selected=selectedPoint?.map===current?.id?selectedPoint.point:navTarget;
+ const eligible=selected&&!journal.picked(current?.id,selected);
+ $('nav-pick').disabled=!eligible;$('nav-undo').disabled=!picked;
+ writeText('nav-selected',selected?t('选中点位')+': '+pointName(selected):t('点击地图点位可标记已拾取'));
+ const held=result?.held||!result?.position||result.id!==current?.id;
+ let message=!navEnabled?'开启后规划全部蛋巢路线':!current?.id.startsWith('sanctum-')?'参考路线暂仅支持地宫':held?'定位未确认，路线暂停':navMessage||'等待当前位置';
+ if(navEnabled&&!held&&navTarget&&Math.hypot(navTarget.x-result.position[0],navTarget.y-result.position[1])<30)message='已接近目标，请自行确认拾取';
+ writeText('nav-status',t(message));writeText('nav-target',t('路线覆盖蛋巢')+' '+navStops.length+' / '+selectableTargets().length+(navUnreachable.length?' · '+t('无法确认连通')+' '+navUnreachable.length:''));
+ writeText('nav-count',t('本图已完成')+' '+picked);
+}
+function navigationLayer(project=p=>p){
+ if(!current||result?.id!==current.id)return {trail:[],path:[],target:null,stops:[],held:true};
+ const trail=$('trail-enabled').checked?journal.map(current.id).trail.map(p=>p?project(p):null):[];
+ return {trail,stops:navEnabled?navStops.map(s=>project(s.position)):[],path:navEnabled?navPath.map(project):[],target:navEnabled&&navTarget?project([navTarget.x,navTarget.y]):null,held:!!result.held};
+}
+function paintNavigation(context,z){
+ const layer=navigationLayer();context.save();context.lineCap='round';context.lineJoin='round';
+ context.strokeStyle=layer.held?'#a8323899':'#d63840';context.lineWidth=3/z;context.beginPath();layer.path.forEach((p,i)=>i?context.lineTo(...p):context.moveTo(...p));context.stroke();
+ context.strokeStyle='#2459bddd';context.lineWidth=5/z;context.beginPath();let next=true;
+ for(const p of layer.trail){if(!p){next=true;continue;}if(next){context.moveTo(...p);context.lineTo(p[0]+.01,p[1]);next=false;}else context.lineTo(...p);}context.stroke();
+ context.font=`bold ${11/z}px sans-serif`;context.textAlign='center';context.textBaseline='middle';
+ layer.stops.forEach((p,i)=>{const x=p[0]+12/z,y=p[1]-12/z;context.fillStyle='#ba252f';context.beginPath();context.arc(x,y,8/z,0,Math.PI*2);context.fill();context.fillStyle='#fff';context.fillText(String(i+1),x,y);});
+
+ context.restore();
+}
+function choosePoint(point){selectedPoint={map:current.id,point};renderNavigation();}
+$('route-enabled').onchange=()=>{navEnabled=$('route-enabled').checked;clearRoute();draw();if(navEnabled)updateRoute(true);};
+$('nav-next').onclick=()=>{navEnabled=true;$('route-enabled').checked=true;selectedPoint=null;clearRoute();draw();updateRoute(true);};
+$('nav-pick').onclick=()=>{const p=selectedPoint?.map===current?.id?selectedPoint.point:navTarget;if(!p||!current)return;journal.pick(current.id,p);selectedPoint=null;clearRoute();draw();updateRoute(true);};
+$('nav-undo').onclick=()=>{if(current)journal.undo(current.id);clearRoute();draw();updateRoute(true);};
+$('trail-enabled').onchange=()=>{draw();publishOverlay(true);};
+$('hide-picked').onchange=()=>{draw();publishOverlay(true);};
+
 function readPointVisibility(){
  try{
    const saved=JSON.parse(localStorage.getItem('aniimo-point-visibility')||'{}');
@@ -33,6 +108,9 @@ $('point-size').onchange=()=>{
  draw();publishOverlay(true);
 };
 let overlayEnabled=false,overlaySending=false,overlayLastSent=0,overlayPending=false,overlayTimer=null;
+let overlayBaseCache=null,overlaySentKey='',overlayBaseSerial=0,webBaseKey='';
+const webBase=document.createElement('canvas');
+function mapContentKey(){return JSON.stringify([current?.id,mapLoadVersion,pointImages.size,pointIconScale,[...enabled].sort(),I18N.language,regionBounds(),journal.pickedRevision,$('hide-picked').checked,lootMarks.filter(m=>m.map===current?.id)]);}
 let realtimeTracking=true;
 try{realtimeTracking=localStorage.getItem('aniimo-realtime-tracking')!=='off';}catch(e){}
 $('realtime-tracking').checked=realtimeTracking;
@@ -56,7 +134,7 @@ function updateLoot(out,now=Date.now()){
  if(!$('loot-enabled').checked||!running){lootEpisode=null;return;}
  const beams=out.loot_observations||[],candidate=out.candidates?.[0];
  const fresh=out.method==='minimap'&&out.status==='matched'&&!candidate?.held&&candidate?.position?.length===2&&candidate.position.every(v=>Number.isFinite(v)&&v>=0);
- const ttl=Math.max(10000,Number($('interval').value)*4);
+ const ttl=Math.max(10000,effectiveInterval()*4);
  if(lootEpisode&&now-lootEpisode.last>ttl)lootEpisode=null;
  if(!beams.length){
    if(lootEpisode){lootEpisode.count=0;if(++lootEpisode.misses>=2)lootEpisode=null;}
@@ -116,28 +194,37 @@ async function publishOverlay(force=false){
  try{
    const dungeon=bitmap&&current?.id.startsWith('sanctum-');
    const confirmed=result?.id===current?.id;
-   let image=null,title='等待识别地宫';
+   let image=null,title='等待识别地宫',player=null,mapKey='empty',navigation={trail:[],path:[],target:null,stops:[],held:true};
    if(dungeon){
-     const copy=document.createElement('canvas');
-     const b=mapBounds||{x:0,y:0,w:current.width,h:current.height},raster=700/Math.max(b.w,b.h);
-     copy.width=Math.max(1,Math.round(b.w*raster));copy.height=Math.max(1,Math.round(b.h*raster));
-     const z=Math.min(copy.width/b.w,copy.height/b.h);
-     const markerScale=.8*z/(Math.min(504/b.w,350/b.h)*.94);
-     paintMap(copy.getContext('2d'),z,(copy.width-b.w*z)/2-b.x*z,(copy.height-b.h*z)/2-b.y*z,markerScale);
-     image=copy.toDataURL('image/png');
-     title=current.name+(!confirmed?' · 地图预览 · 尚未确认':result.held?' · 保留上次位置':result.position?' · 你的位置':' · 等待角色定位');
+     const b=mapBounds||{x:0,y:0,w:current.width,h:current.height},raster=Math.min(1,2048/Math.max(b.w,b.h));
+     const key=mapContentKey()+JSON.stringify(b);
+     if(!overlayBaseCache||overlayBaseCache.content!==key){
+       const copy=document.createElement('canvas');copy.width=Math.max(1,Math.round(b.w*raster));copy.height=Math.max(1,Math.round(b.h*raster));
+       const z=Math.min(copy.width/b.w,copy.height/b.h),x=(copy.width-b.w*z)/2-b.x*z,y=(copy.height-b.h*z)/2-b.y*z;
+       const markerScale=.8*z/(Math.min(504/b.w,350/b.h)*.94);
+       paintMap(copy.getContext('2d'),z,x,y,markerScale,false);
+       overlayBaseCache={content:key,key:observationSession+'-map-'+(++overlayBaseSerial),image:copy.toDataURL('image/png'),w:copy.width,h:copy.height,z,x,y};
+     }
+     const base=overlayBaseCache;mapKey=base.key;image=base.image;
+     const project=p=>[(p[0]*base.z+base.x)/base.w,(p[1]*base.z+base.y)/base.h];
+     navigation=navigationLayer(project);
+     if(confirmed&&result.position){const [x,y]=project(result.position);player={x,y,held:!!result.held,label:t(result.held?'你·上次':result.position_source==='auto'?'你':'手动'),polygon:(result.polygon||[]).map(project)};}
+     title=current.name+(!confirmed?' · 地图预览 · 尚未确认':result.held?(recoveryActive?' · 正在重新定位':' · 保留上次位置'):result.position?' · 你的位置':' · 等待角色定位');
    }
-   const response=await fetch('/api/overlay/frame',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image,title:t(title),language:I18N.language})});
+   const payload={map_key:mapKey,player,navigation,title:t(title),language:I18N.language};
+   if(mapKey!==overlaySentKey||!dungeon)payload.image=image;
+   const response=await fetch('/api/overlay/frame',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
    if(!response.ok)throw Error('悬浮窗同步失败');
- }catch(e){$('overlay-hint').textContent='悬浮窗暂未同步，请检查本地服务。';}finally{overlaySending=false;if(overlayPending){overlayPending=false;publishOverlay(true);}}
+   overlaySentKey=mapKey;
+ }catch(e){overlaySentKey='';$('overlay-hint').textContent='悬浮窗暂未同步，请检查本地服务。';}finally{overlaySending=false;if(overlayPending){overlayPending=false;publishOverlay(true);}}
 }
 $('overlay').onclick=async()=>{
  $('overlay').disabled=true;
- try{const response=await fetch('/api/overlay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:overlayEnabled?'stop':'start'})});const state=await response.json();if(!response.ok)throw Error(state.error);overlayEnabled=state.enabled;overlayButton();await publishOverlay(true);}
+ try{const response=await fetch('/api/overlay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:overlayEnabled?'stop':'start'})});const state=await response.json();if(!response.ok)throw Error(state.error);overlayEnabled=state.enabled;overlaySentKey='';overlayButton();await publishOverlay(true);}
  catch(e){$('overlay-hint').textContent='悬浮窗未启动：'+e.message;}finally{$('overlay').disabled=false;}
 };
 async function overlayStatus(){
- try{const response=await fetch('/api/overlay');if(response.ok){const state=await response.json();const justOpened=!overlayEnabled&&state.enabled;overlayEnabled=state.enabled;overlayButton();if(justOpened)await publishOverlay(true);}}
+ try{const response=await fetch('/api/overlay');if(response.ok){const state=await response.json();const justOpened=!overlayEnabled&&state.enabled;overlayEnabled=state.enabled;overlayButton();if(justOpened){overlaySentKey='';await publishOverlay(true);}}}
  catch(e){}setTimeout(overlayStatus,2500);
 }
 // Display regions are approximate island extents on the shared atlas, not game boundaries.
@@ -165,8 +252,19 @@ function syncSeaRegion(){
  const next=seaView==='auto'?(result?.id===current.id&&result.position?regionAt(result.position):null):seaRegions.find(r=>r.id===seaView);
  const changed=next?.id!==activeSeaRegion?.id;activeSeaRegion=next||null;return changed;
 }
-function rememberPosition(candidate){if(candidate?.position){tracking={id:candidate.id,position:candidate.position,scale:candidate.minimap_scale};trackedAt=Date.now();lastKnown={...candidate};}else if(candidate&&lastKnown?.id!==candidate.id){tracking=null;lastKnown=null;}}
-function holdPosition(){if(!lastKnown)return false;result={...lastKnown,held:true,polygon:[]};$('position-status').textContent='位置暂未更新 · 保留上次位置';$('result').textContent='位置保留 · '+lastKnown.name;$('reason').textContent=`画面暂时无法定位，按仍在原处显示。上次定位 ${Math.max(0,Math.floor((Date.now()-trackedAt)/1000))} 秒前；地图恢复后自动继续。`;return true;}
+function rememberPosition(candidate){
+ if(candidate?.position){
+  const now=Date.now();
+  if(lastKnown?.position&&lastKnown.id!==candidate.id){journal.pause();clearRoute();}
+  else if(lastKnown?.position&&Math.hypot(candidate.position[0]-lastKnown.position[0],candidate.position[1]-lastKnown.position[1])>100){journal.pause();routeFollower.pause();}
+  if(running&&!candidate.held){
+   journal.record(candidate.id,candidate.position,now);
+   if(navEnabled&&current?.id===candidate.id){routeFollower.observe(candidate.position,now);if(routeFollower.path.length)navPath=routeFollower.remaining();}
+  }
+  tracking={id:candidate.id,position:candidate.position,scale:candidate.minimap_scale};trackedAt=Date.now();lastKnown={...candidate};
+ }else if(candidate&&lastKnown?.id!==candidate.id){tracking=null;lastKnown=null;}
+}
+function holdPosition(){journal.pause();routeFollower.pause();if(!lastKnown)return false;result={...lastKnown,held:true,polygon:[]};$('position-status').textContent='位置暂未更新 · 保留上次位置';$('result').textContent='位置保留 · '+lastKnown.name;$('reason').textContent=`画面暂时无法定位，按仍在原处显示。上次定位 ${Math.max(0,Math.floor((Date.now()-trackedAt)/1000))} 秒前；地图恢复后自动继续。`;return true;}
 const temp=document.createElement('canvas'), tc=temp.getContext('2d');
 const ICON_PATHS={
  compass:'M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20 M16 8l-3 5-5 3 3-5z',
@@ -269,11 +367,11 @@ function uniqueMapPoints(points){
  }
  return unique;
 }
-function drawMarker(p,style,ctx,zoom,markerScale=1){if(style.point){drawOriginalPoint(p,style,ctx,zoom,markerScale);return;}const {color}=style;const size=style.size*1.4*markerScale;ctx.save();ctx.translate(p.x,p.y);ctx.scale(1/zoom,1/zoom);ctx.shadowColor='#0009';ctx.shadowBlur=3;ctx.fillStyle='#101b25b8';ctx.strokeStyle=color;ctx.lineWidth=1.15;ctx.beginPath();ctx.arc(0,0,size/2,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;const s=(size-5)/24;ctx.scale(s,s);ctx.translate(-12,-12);ctx.lineWidth=1.9;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(iconPaths[style.icon]);ctx.restore();if(style.label){ctx.save();ctx.font=`600 ${11*Math.max(.75,markerScale)/zoom}px sans-serif`;ctx.lineWidth=3/zoom;ctx.strokeStyle='#0b141e';ctx.strokeText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.fillStyle=color;ctx.fillText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.restore();}}
-function newRun(){captureKind='full';lastFullFrameAt=-Infinity;lastCaptureSize='';resetLoot();seaView='auto';$('sea-region').value='auto';history=[];lastSignature=null;result=null;tracking=null;lastKnown=null;trackedAt=0;generation++;$('position-status').textContent='先开大地图校准，再用小地图追踪';$('result').textContent='新一局 · 等待主门附近地图';$('reason').textContent='从黄门进入后打开地图，探索更多房间以缩小候选。';$('candidates').replaceChildren();draw();}
+function drawMarker(p,style,ctx,zoom,markerScale=1){if(style.point){ctx.save();if(current&&journal.picked(current.id,p))ctx.globalAlpha=.28;drawOriginalPoint(p,style,ctx,zoom,markerScale);ctx.restore();return;}const {color}=style;const size=style.size*1.4*markerScale;ctx.save();ctx.translate(p.x,p.y);ctx.scale(1/zoom,1/zoom);ctx.shadowColor='#0009';ctx.shadowBlur=3;ctx.fillStyle='#101b25b8';ctx.strokeStyle=color;ctx.lineWidth=1.15;ctx.beginPath();ctx.arc(0,0,size/2,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;const s=(size-5)/24;ctx.scale(s,s);ctx.translate(-12,-12);ctx.lineWidth=1.9;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(iconPaths[style.icon]);ctx.restore();if(style.label){ctx.save();ctx.font=`600 ${11*Math.max(.75,markerScale)/zoom}px sans-serif`;ctx.lineWidth=3/zoom;ctx.strokeStyle='#0b141e';ctx.strokeText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.fillStyle=color;ctx.fillText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.restore();}}
+function newRun(){resetNavigation();captureKind='full';lastFullFrameAt=-Infinity;lastCaptureSize='';resetLoot();seaView='auto';$('sea-region').value='auto';history=[];lastSignature=null;result=null;tracking=null;lastKnown=null;trackedAt=0;generation++;$('position-status').textContent='先开大地图校准，再用小地图追踪';$('result').textContent='新一局 · 等待主门附近地图';$('reason').textContent='从黄门进入后打开地图，探索更多房间以缩小候选。';$('candidates').replaceChildren();draw();}
 function notice(text){$('reason').textContent=text;}
 async function loadMap(id){
- const requestVersion=++mapLoadVersion;
+ const requestVersion=++mapLoadVersion;if(current?.id!==id){clearRoute();selectedPoint=null;}
  const d=await fetch('/data/'+id+'.json',{cache:'no-store'}).then(r=>r.json());
  const im=new Image();im.src=d.image;await im.decode();if(requestVersion!==mapLoadVersion)return;current=d;current.displayPoints=uniqueMapPoints(d.points);bitmap=im;
  const measure=document.createElement('canvas');measure.width=256;measure.height=256;const mc=measure.getContext('2d');mc.drawImage(im,0,0,256,256);const pixels=mc.getImageData(0,0,256,256).data;let left=256,top=256,right=0,bottom=0;for(let y=0;y<256;y++)for(let x=0;x<256;x++){const i=(y*256+x)*4;if((pixels[i]+pixels[i+1]+pixels[i+2])/3>85){left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}}mapBounds=right>left?{x:Math.max(0,left-8)*d.width/256,y:Math.max(0,top-8)*d.height/256,w:Math.min(256,right-left+16)*d.width/256,h:Math.min(256,bottom-top+16)*d.height/256}:{x:0,y:0,w:d.width,h:d.height};
@@ -283,48 +381,82 @@ async function loadMap(id){
  $('mapinfo').textContent=`${d.name} · ${d.width} × ${d.height} · ${current.displayPoints.length} 条点位`;fit();
 }
 function fit(){if(!current)return;syncSeaRegion();const b=regionBounds()||mapBounds||{x:0,y:0,w:current.width,h:current.height};zoom=Math.min(canvas.clientWidth/b.w,canvas.clientHeight/b.h)*.90;ox=(canvas.clientWidth-b.w*zoom)/2-b.x*zoom;oy=(canvas.clientHeight-b.h*zoom)/2-b.y*zoom;draw();}
-function paintMap(ctx,zoom,ox,oy,markerScale=1){
+function paintMap(ctx,zoom,ox,oy,markerScale=1,includePlayer=true){
  ctx.save();ctx.translate(ox,oy);ctx.scale(zoom,zoom);const crop=regionBounds();if(crop){ctx.beginPath();ctx.rect(crop.x,crop.y,crop.w,crop.h);ctx.clip();}ctx.drawImage(bitmap,0,0,current.width,current.height);
- const seen=new Set(),doors=[];for(const p of current.displayPoints||current.points){if(!enabled.has(p.category))continue;const key=p.category+':'+p.x+':'+p.y;if(seen.has(key))continue;seen.add(key);if(p.category==='entrance'||p.category==='side-entrance'){doors.push(p);continue;}const cat=current.categories.find(c=>c.id===p.category);drawMarker(p,markerStyle(p.category,cat?.color,p.name),ctx,zoom,markerScale*pointIconScale);}for(const p of doors)drawMarker(p,markerStyle(p.category),ctx,zoom,markerScale*pointIconScale);
+ const seen=new Set(),doors=[];for(const p of current.displayPoints||current.points){if(!enabled.has(p.category)||($('hide-picked').checked&&journal.picked(current.id,p)))continue;const key=p.category+':'+p.x+':'+p.y;if(seen.has(key))continue;seen.add(key);if(p.category==='entrance'||p.category==='side-entrance'){doors.push(p);continue;}const cat=current.categories.find(c=>c.id===p.category);drawMarker(p,markerStyle(p.category,cat?.color,p.name),ctx,zoom,markerScale*pointIconScale);}for(const p of doors)drawMarker(p,markerStyle(p.category),ctx,zoom,markerScale*pointIconScale);
  paintLoot(ctx,zoom,markerScale);
- if(result&&result.id===current.id){ctx.strokeStyle='#58ead2';ctx.fillStyle='#58ead213';ctx.lineWidth=2/zoom;ctx.beginPath();result.polygon.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.closePath();ctx.fill();ctx.stroke();if(result.position){ctx.fillStyle=result.held?'#e6b75b':'#ff7188';ctx.beginPath();ctx.arc(...result.position,9/zoom,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2/zoom;ctx.stroke();ctx.font=`600 ${12/zoom}px sans-serif`;ctx.fillStyle='#fff';ctx.strokeStyle='#111b29';ctx.lineWidth=3/zoom;const playerLabel=t(result.held?'你·上次':result.position_source==='auto'?'你':'手动');ctx.strokeText(playerLabel,result.position[0]+14/zoom,result.position[1]+4/zoom);ctx.fillText(playerLabel,result.position[0]+14/zoom,result.position[1]+4/zoom);}}
+ if(includePlayer)paintPlayer(ctx,zoom);
  ctx.restore();
 }
+function paintPlayer(ctx,zoom){
+ if(result&&result.id===current.id){ctx.strokeStyle='#58ead2';ctx.fillStyle='#58ead213';ctx.lineWidth=2/zoom;ctx.beginPath();result.polygon.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.closePath();ctx.fill();ctx.stroke();if(result.position){ctx.fillStyle=result.held?'#e6b75b':'#ff7188';ctx.beginPath();ctx.arc(...result.position,9/zoom,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2/zoom;ctx.stroke();ctx.font=`600 ${12/zoom}px sans-serif`;ctx.fillStyle='#fff';ctx.strokeStyle='#111b29';ctx.lineWidth=3/zoom;const playerLabel=t(result.held?'你·上次':result.position_source==='auto'?'你':'手动');ctx.strokeText(playerLabel,result.position[0]+14/zoom,result.position[1]+4/zoom);ctx.fillText(playerLabel,result.position[0]+14/zoom,result.position[1]+4/zoom);}}
+}
 function draw(){
- renderLootList();
+ renderLootList();renderNavigation();syncQuality();
  if(current&&syncSeaRegion()){fit();return;}
  const w=canvas.clientWidth,h=canvas.clientHeight,dpr=devicePixelRatio; if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);if(!bitmap)return;
- paintMap(ctx,zoom,ox,oy);$('viewmode').textContent=isSea()?(activeSeaRegion&&seaView!=='all'?activeSeaRegion.name+' · 分区地图':'全岛总览'):(result&&result.id===current.id?(result.held?'保留上次位置':'匹配范围'):'全图浏览');
- publishOverlay();
+ const baseKey=mapContentKey()+JSON.stringify([w,h,dpr,zoom,ox,oy]);
+ if(webBaseKey!==baseKey){webBase.width=canvas.width;webBase.height=canvas.height;const baseContext=webBase.getContext('2d');baseContext.setTransform(dpr,0,0,dpr,0,0);paintMap(baseContext,zoom,ox,oy,1,false);webBaseKey=baseKey;}
+ ctx.drawImage(webBase,0,0,webBase.width,webBase.height,0,0,w,h);
+ ctx.save();ctx.translate(ox,oy);ctx.scale(zoom,zoom);const activeCrop=regionBounds();if(activeCrop){ctx.beginPath();ctx.rect(activeCrop.x,activeCrop.y,activeCrop.w,activeCrop.h);ctx.clip();}paintNavigation(ctx,zoom);paintPlayer(ctx,zoom);ctx.restore();$('viewmode').textContent=isSea()?(activeSeaRegion&&seaView!=='all'?activeSeaRegion.name+' · 分区地图':'全岛总览'):(result&&result.id===current.id?(result.held?'保留上次位置':'匹配范围'):'全图浏览');
+ publishOverlay();updateRoute();
 }
-let drag=null;canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,ox,oy};canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(drag){ox=drag.ox+e.clientX-drag.x;oy=drag.oy+e.clientY-drag.y;draw();}};canvas.onpointerup=e=>{if(drag&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<5&&current){const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left-ox)/zoom,y=(e.clientY-r.top-oy)/zoom;const near=(current.displayPoints||current.points).filter(p=>enabled.has(p.category)&&Math.hypot(p.x-x,p.y-y)<20/zoom);$('tooltip').textContent=[...new Set(near.map(p=>pointName(p)))].join(' / ');$('tooltip').style.display=near.length?'block':'none';}drag=null;};canvas.onwheel=e=>{e.preventDefault();const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const z=Math.max(.08,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));ox=x-(x-ox)*z/zoom;oy=y-(y-oy)*z/zoom;zoom=z;draw();};
+let drag=null;canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,ox,oy};canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(drag){ox=drag.ox+e.clientX-drag.x;oy=drag.oy+e.clientY-drag.y;draw();}};canvas.onpointerup=e=>{if(drag&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<5&&current){const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left-ox)/zoom,y=(e.clientY-r.top-oy)/zoom;const near=(current.displayPoints||current.points).filter(p=>enabled.has(p.category)&&(!$('hide-picked').checked||!journal.picked(current.id,p))&&Math.hypot(p.x-x,p.y-y)<20/zoom);if(near.length)choosePoint(near.sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y))[0]);$('tooltip').textContent=[...new Set(near.map(p=>pointName(p)))].join(' / ');$('tooltip').style.display=near.length?'block':'none';}drag=null;};canvas.onwheel=e=>{e.preventDefault();const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const z=Math.max(.08,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));ox=x-(x-ox)*z/zoom;oy=y-(y-oy)*z/zoom;zoom=z;draw();};
 new ResizeObserver(()=>fit()).observe($('mapwrap'));
 function preview(){if(!frame)return;const w=frame.videoWidth||frame.width,h=frame.videoHeight||frame.height,s=Math.min(1,800/Math.max(w,h));const pw=Math.round(w*s),ph=Math.round(h*s);if(cap.width!==pw||cap.height!==ph){cap.width=pw;cap.height=ph;}cc.clearRect(0,0,cap.width,cap.height);cc.drawImage(frame,0,0,cap.width,cap.height);$('empty').hidden=true;}
 $('newrun').onclick=newRun;$('outdoor-mode').onchange=()=>{newRun();notice('海岛模式已更换，请打开大地图重新校准。');};
 async function importFile(file){if(!file||!file.type.startsWith('image/'))return;stop();const im=await createImageBitmap(file);frame=im;cap.width=im.width;cap.height=im.height;newRun();$('capture-status').textContent='截图模式';preview();await identify();}
 $('file').onchange=e=>importFile(e.target.files[0]).catch(e=>notice(e.message));document.onpaste=e=>{const f=[...e.clipboardData.items].find(i=>i.type.startsWith('image/'));if(f)importFile(f.getAsFile()).catch(e=>notice(e.message));};
 let captureEpoch=0,firstFrameDeadline=0,receivedCaptureFrame=false;
+const frameClock=new NavigatorTools.FrameClock();
+let captureRate=null,ratePending=false,mediaFrame=null,videoCallback=null,matchController=null,currentCaptureAt=0;
+let nativeSession=null,nativePreviewAt=0,nativeSequence=0,nativeRetryAfter=0,nativeCost=null;
+function captureInterval(){return realtimeTracking?effectiveInterval():Math.max(1000,effectiveInterval());}
+function watchVideo(video,epoch){
+ if(!video.requestVideoFrameCallback)return;
+ videoCallback=video.requestVideoFrameCallback((now,meta)=>{if(epoch!==captureEpoch)return;mediaFrame=meta.presentedFrames;watchVideo(video,epoch);});
+}
+function videoToken(video){
+ const q=video.getVideoPlaybackQuality?.();
+ if(q&&q.totalVideoFrames>0)return 'decoded:'+q.totalVideoFrames;
+ if(mediaFrame!==null)return 'presented:'+mediaFrame;
+ return Number.isFinite(video.currentTime)?'time:'+video.currentTime:null;
+}
+async function updateCaptureRate(){
+ const track=stream?.getVideoTracks()[0],fps=NavigatorTools.captureFps(captureInterval());
+ if(!track?.applyConstraints||captureRate===fps||ratePending)return;
+ const epoch=captureEpoch;ratePending=true;
+ try{await track.applyConstraints({frameRate:{ideal:fps,max:fps}});if(epoch===captureEpoch)captureRate=fps;}
+ catch(e){/* Keep a working share when a driver refuses rate constraints. */}
+ finally{ratePending=false;}
+}
+
 function captureMessage(text){$('capture-status').textContent=text;$('empty').textContent=text;$('empty').hidden=false;}
 function stop(){
- captureEpoch++;running=false;clearTimeout(timer);timer=null;
+ captureEpoch++;running=false;clearTimeout(timer);
+ matchController?.abort();frameClock.reset();mediaFrame=null;captureRate=null;currentCaptureAt=0;
+ if(videoCallback!==null)$('video').cancelVideoFrameCallback?.(videoCallback);videoCallback=null;
+ if(nativeSession){const session=nativeSession;nativeSession=null;fetch('/api/native',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'stop',session}),keepalive:true}).catch(()=>{});}
+ $('native-start').disabled=false;
+timer=null;journal.pause();routeFollower.pause();navRequest++;if(lastKnown)holdPosition();
  const previous=stream;stream=null;
  if(previous)previous.getTracks().forEach(t=>{t.onended=null;t.stop();});
  const video=$('video');video.pause?.();video.srcObject=null;frame=null;
  $('stop').disabled=true;$('share').disabled=false;captureMessage('未连接画面');generation++;
 }
-$('stop').onclick=()=>{stop();notice('已停止读取游戏画面。');};
+$('stop').onclick=()=>{stop();draw();notice('已停止读取游戏画面。');};
 $('share').onclick=async()=>{
  stop();const epoch=captureEpoch;$('share').disabled=true;$('stop').disabled=false;
  captureMessage('请选择要共享的游戏窗口');
  try{
   if(!navigator.mediaDevices?.getDisplayMedia)throw Error('当前浏览器不支持窗口读取，请用 Chrome 或 Edge 打开本地地址。');
-  const selected=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:8,max:8}},audio:false});
+  const selected=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:NavigatorTools.captureFps(captureInterval()),max:NavigatorTools.captureFps(captureInterval())}},audio:false});
   if(epoch!==captureEpoch){selected.getTracks().forEach(t=>t.stop());return;}
   stream=selected;const track=selected.getVideoTracks()[0];
   if(!track||track.readyState==='ended')throw Error('所选窗口的共享已经结束，请重新选择。');
   track.onended=()=>{if(epoch!==captureEpoch)return;stop();notice('窗口共享已结束。');};
   const video=$('video');video.muted=true;video.playsInline=true;video.srcObject=selected;
-  running=true;receivedCaptureFrame=false;firstFrameDeadline=performance.now()+12000;newRun();
+  watchVideo(video,epoch);running=true;receivedCaptureFrame=false;firstFrameDeadline=performance.now()+12000;newRun();
   captureMessage('已授权，正在等待游戏画面');notice('请切回游戏并保持窗口打开；收到画面后会自动开始识别。');
   // A play promise may remain pending until the source supplies its first
   // frame. Do not let it block status updates, cancellation or the watchdog.
@@ -332,36 +464,84 @@ $('share').onclick=async()=>{
   tick(epoch);
  }catch(e){if(epoch!==captureEpoch)return;stop();notice(e.name==='NotAllowedError'?'共享已取消或未获授权，请重新选择游戏窗口。':'未开始读取：'+e.message);}
 };
+
+async function nativeRequest(payload){
+ const response=await fetch('/api/native',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(15000)});
+ const out=await response.json();if(!response.ok)throw Error(out.error||'本地采集不可用');return out;
+}
+async function listNativeWindows(){
+ $('native-connect').disabled=true;$('native-help').textContent='正在读取可用窗口…';
+ try{const out=await nativeRequest({action:'list'});$('native-window').replaceChildren();
+  for(const item of out.windows){const option=document.createElement('option');option.value=item.id;option.textContent=item.title+' · '+item.pid;$('native-window').append(option);}
+  $('native-connect').disabled=!out.windows.length;$('native-help').textContent=out.windows.length?'请选择伊莫游戏窗口。仅在本机读取，停止后立即结束采集。':'没有可用窗口，请先打开游戏。';
+ }catch(e){$('native-help').textContent=e.message;}
+}
+$('native-start').onclick=()=>{$('native-dialog').showModal();listNativeWindows();};
+$('native-refresh').onclick=listNativeWindows;
+$('native-cancel').onclick=()=>$('native-dialog').close();
+$('native-connect').onclick=async()=>{
+ const windowId=$('native-window').value;if(!windowId)return;
+ $('native-dialog').close();stop();const epoch=captureEpoch;$('share').disabled=true;$('native-start').disabled=true;$('stop').disabled=false;captureMessage('正在连接本地采集…');
+ try{const out=await nativeRequest({action:'start',window:windowId,interval:captureInterval()});
+  if(epoch!==captureEpoch){nativeRequest({action:'stop',session:out.session}).catch(()=>{});return;}
+  nativeSession=out.session;nativeSequence=0;nativePreviewAt=-Infinity;receivedCaptureFrame=false;firstFrameDeadline=performance.now()+12000;
+  running=true;newRun();notice('本地采集已连接，请打开游戏大地图校准。');tick(epoch);
+ }catch(e){if(epoch!==captureEpoch)return;stop();notice(e.message);}
+};
+
 function scanDelay(interval,elapsed){return Math.max(50,elapsed*.5,interval-elapsed);}
 async function tick(epoch=captureEpoch){
  if(!running||epoch!==captureEpoch)return;const started=performance.now();
  try{
+  if(nativeSession){nativeCost=null;await identify();if(epoch!==captureEpoch)return;const live=result?.position&&!result.held?result:null;if(nativeCost!==null)cadence.observe(nativeCost,live?.position,live?.id,Date.now());syncQuality();return;}
+  updateCaptureRate();
   const video=$('video');const track=stream?.getVideoTracks()[0];
   if(!track||track.readyState==='ended'){stop();notice('窗口共享已结束。');return;}
   if(video.readyState>=2&&video.videoWidth>0&&video.videoHeight>0&&!track.muted){
-   frame=video;preview();
+   const health=frameClock.observe(videoToken(video),performance.now(),captureInterval());
+   if(health!=='fresh'){
+    if(health==='stalled'){recoveryActive=false;holdPosition();draw();captureMessage('画面未更新 · 等待恢复');$('reason').textContent='视频帧暂未更新，已保留位置。请确认游戏未最小化；画面恢复后会自动继续，持续无画面时请重新选择窗口。';}
+    return;
+   }
+   currentCaptureAt=Date.now();observationSequence++;frame=video;preview();
    if(!receivedCaptureFrame){receivedCaptureFrame=true;notice('已收到游戏画面，正在识别。');}
    $('capture-status').textContent='持续识别中';await identify();
+   const live=result?.position&&!result.held?result:null;cadence.observe(performance.now()-started,live?.position,live?.id,Date.now());syncQuality();
   }else if(!receivedCaptureFrame&&performance.now()>firstFrameDeadline){
    stop();notice('已授权，但 12 秒内未收到游戏画面。请保持游戏窗口打开且不要最小化；仍无画面时，可在共享框中尝试“整个屏幕”。');
-  }else captureMessage(receivedCaptureFrame?'画面暂时暂停，请切回游戏':'已授权，正在等待游戏画面');
+  }else{captureMessage(receivedCaptureFrame?'画面暂时暂停，请切回游戏':'已授权，正在等待游戏画面');if(receivedCaptureFrame){recoveryActive=false;navRequest++;holdPosition();draw();}}
  }catch(e){if(epoch===captureEpoch)notice('读取画面失败：'+e.message);}
- finally{if(running&&epoch===captureEpoch)timer=setTimeout(()=>tick(epoch),receivedCaptureFrame?scanDelay(realtimeTracking?Number($('interval').value):Math.max(1000,Number($('interval').value)),performance.now()-started):200);}
+ finally{
+  if(running&&epoch===captureEpoch){
+   if(nativeSession&&performance.now()>=nativeRetryAfter){
+    // The native endpoint long-polls at the requested interval. No background timer dependency.
+    Promise.resolve().then(()=>tick(epoch));
+   }else timer=setTimeout(()=>tick(epoch),nativeSession?1000:receivedCaptureFrame?scanDelay(captureInterval(),performance.now()-started):200);
+  }
+ }
 }
 function signature(){const c=document.createElement('canvas');c.width=c.height=32;const x=c.getContext('2d');x.drawImage(temp,0,0,32,32);const d=x.getImageData(0,0,32,32).data;return Array.from({length:1024},(_,i)=>Math.round((d[i*4]+d[i*4+1]+d[i*4+2])/24));}
 function evidence(r,sig){
- const changed=!lastSignature||sig.reduce((s,v,i)=>s+Math.abs(v-lastSignature[i]),0)/sig.length>.7;
+ const changed=!!sig&&(!lastSignature||sig.reduce((s,v,i)=>s+Math.abs(v-lastSignature[i]),0)/sig.length>.7);
  if(changed&&r.candidates?.length){history.push(r.candidates.map(c=>({id:c.id,score:c.score})));history=history.slice(-8);lastSignature=sig;}
  const tally=new Map();history.forEach((list,i)=>{const top=list[0]?.score||1;list.forEach(c=>{let t=tally.get(c.id)||{value:0,frames:0};t.value+=c.score/top*Math.pow(.85,history.length-1-i);if(c.id===list[0].id)t.frames++;tally.set(c.id,t);});});
  return tally;
 }
 function capturePayload(forceFull=false){
+ if(nativeSession){
+  const full=forceFull||performance.now()-lastFullFrameAt>=5000;
+  if(full)lastFullFrameAt=performance.now();
+  const preview=performance.now()-nativePreviewAt>=1000;
+  if(preview)nativePreviewAt=performance.now();
+  return {sig:null,payload:{native_session:nativeSession,after:nativeSequence,interval:captureInterval(),force_full:full,preview,loot:realtimeTracking&&$('loot-enabled').checked,tracking,outdoor_mode:$('outdoor-mode').value,realtime_tracking:realtimeTracking,observation:{session:observationSession+'-'+generation,sequence:1,captured_at:Date.now()}}};
+ }
  const w=frame.videoWidth||frame.width,h=frame.videoHeight||frame.height,size=w+'x'+h,now=performance.now();
  // A periodic full check also protects against a full-map icon looking like a HUD arrow.
  const diameter=2*Math.round(h*.089);
  const crop=running&&!forceFull&&captureKind==='minimap'&&size===lastCaptureSize&&now-lastFullFrameAt<5000&&w/h>=1.45&&w/h<=2.1&&diameter>=64&&diameter<=1024;
  lastCaptureSize=size;
  const payload={anchor:null,tracking,outdoor_mode:$('outdoor-mode').value,realtime_tracking:realtimeTracking,capture_kind:crop?'minimap':'full'};
+ if(running)payload.observation={session:observationSession+'-'+generation,sequence:observationSequence||1,captured_at:currentCaptureAt||Date.now()};
  if(crop){
    const r=Math.round(h*.089),cx=Math.round(w*.0945),cy=Math.round(h*.132);
    temp.width=temp.height=2*r;tc.drawImage(frame,cx-r,cy-r,2*r,2*r,0,0,2*r,2*r);
@@ -375,24 +555,39 @@ function capturePayload(forceFull=false){
  return {payload,sig:crop?null:signature()};
 }
 async function requestMatch(payload){
- const response=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
- const out=await response.json();if(!response.ok)throw Error(out.error||'识别失败');return out;
+ const controller=new AbortController();matchController=controller;
+ const timeout=setTimeout(()=>controller.abort(),15000);
+ try{
+ const response=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:controller.signal});
+ const out=await response.json();if(!response.ok){const error=Error(out.error||'识别失败');error.status=response.status;throw error;}return out;
+ }catch(e){if(e.name==='AbortError')throw Error('识别等待超时或已停止，下一次读取会自动重试');throw e;}
+ finally{clearTimeout(timeout);if(matchController===controller)matchController=null;}
 }
 async function identify(forceFull=false){
- if(!frame||busy)return;busy=true;const g=generation;
+ if((!frame&&!nativeSession)||busy)return;busy=true;const g=generation;
  try{
  let {payload,sig}=capturePayload(forceFull),out=await requestMatch(payload);if(g!==generation)return;
+ if(out.capture_wait){
+  recoveryActive=false;holdPosition();draw();captureMessage(out.reason);
+  if(!receivedCaptureFrame&&performance.now()>firstFrameDeadline)$('reason').textContent='本地采集暂未收到新画面，请保持游戏窗口打开；持续无画面可改用浏览器分享。';
+  return;
+ }
+ if(out.native_capture){
+  const meta=out.native_capture;nativeCost=Number(meta.processing_ms)||0;nativeSequence=meta.sequence;currentCaptureAt=meta.captured_at;sig=meta.signature;
+  receivedCaptureFrame=true;$('capture-status').textContent='本地采集中';
+  if(meta.preview){const im=new Image();im.src=meta.preview;await im.decode();if(g!==generation)return;cap.width=im.width;cap.height=im.height;cc.drawImage(im,0,0);$('empty').hidden=true;}
+ }
  if(out.requires_full_frame){
    ({payload,sig}=capturePayload(true));out=await requestMatch(payload);if(g!==generation)return;
  }
- captureKind=out.method==='minimap'?'minimap':'full';updateLoot(out);
+ captureKind=out.method==='minimap'?'minimap':'full';recoveryActive=!!out.recovering;updateLoot(out);
  if(out.method==='minimap'){
    if(out.status==='paused'){showTrackingPaused();draw();return;}
    result=out.status==='matched'?out.candidates[0]:null;
    $('position-status').textContent=result?'小地图追踪中 · 每帧重新定位':'小地图定位暂停';
    $('result').textContent=result?'实时位置 · '+result.name:tracking?'已锁定地图 · 暂未定位':'请先打开大地图';
    $('reason').textContent=out.reason;$('candidates').replaceChildren();
-   if(result){rememberPosition(result);if(current?.id!==result.id)await loadMap(result.id);}else{holdPosition();}
+   if(result){rememberPosition(result);if(current?.id!==result.id)await loadMap(result.id);}else{holdPosition();if(out.reason)$('reason').textContent=out.reason;}
    draw();return;
  }
  $('position-status').textContent='正在确认地图与位置';
@@ -418,7 +613,7 @@ async function identify(forceFull=false){
  if(!result&&leader){$('result').textContent='候选预览 · '+leader.name;$('reason').textContent+=' 当前仅预览候选，确认该地图可点击候选卡片开始追踪。';}
  if(!realtimeTracking){if(result&&!result.held)$('position-status').textContent='大地图位置已更新 · 实时定位已关闭';else showTrackingPaused();}
  draw();
- }catch(e){result=null;if(!holdPosition())notice('识别暂不可用：'+e.message);draw();}finally{busy=false;}
+ }catch(e){if(g!==generation)return;nativeRetryAfter=performance.now()+1000;if(nativeSession&&e.status===400)stop();recoveryActive=false;result=null;holdPosition();notice('识别暂不可用：'+e.message);draw();}finally{busy=false;}
 }
 $('once').onclick=()=>identify(true);$('fit').onclick=()=>{if(isSea()){seaView='all';$('sea-region').value='all';}fit();};
 for(const r of seaRegions){const o=document.createElement('option');o.value=r.id;o.textContent=r.name;$('sea-region').append(o);}
@@ -428,7 +623,7 @@ $('focus').onclick=()=>{const active=document.body.classList.toggle('focus-mode'
 function zoomBy(factor){const x=canvas.clientWidth/2,y=canvas.clientHeight/2,z=Math.max(.08,Math.min(8,zoom*factor));ox=x-(x-ox)*z/zoom;oy=y-(y-oy)*z/zoom;zoom=z;draw();}
 $('zoom-in').onclick=()=>zoomBy(1.3);$('zoom-out').onclick=()=>zoomBy(1/1.3);
 document.querySelector('.upload').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('file').click();}};
-async function status(){try{const s=await fetch('/api/status').then(r=>r.json());$('engine').title=s.error||'';if(s.error)notice('识别引擎异常：'+s.error);$('engine').textContent=s.error?'识别引擎异常':s.ready?`${s.indexed} 张地图 · 本地识别就绪`:`正在索引 ${s.indexed} 张地图…`;if(!s.ready&&!s.error)setTimeout(status,1500);}catch(e){$('engine').textContent='本地服务未连接';}}
+async function status(){try{const s=await fetch('/api/status').then(r=>r.json());$('engine').title=s.error||'';if(s.error)notice('识别引擎异常：'+s.error);$('engine').textContent=s.error?'识别引擎异常':s.ready?`${s.indexed} 张地图 · 本地识别就绪${s.version?" · v"+s.version:""}`:`正在索引 ${s.indexed} 张地图…`;if(!s.ready&&!s.error)setTimeout(status,1500);}catch(e){$('engine').textContent='本地服务未连接';}}
 async function init(){await loadPointImages();await loadMap('sanctum-31');status();overlayStatus();}init().catch(e=>notice('地图加载失败：'+e.message));
 const buttonIcons={newrun:'reset',focus:'focus',share:'monitor',stop:'stop',once:'scan',fit:'focus','zoom-in':'plus','zoom-out':'minus'};
 function decorateButtons(){for(const [id,name]of Object.entries(buttonIcons)){const el=$(id);if(!el||el.querySelector('.ui-icon'))continue;if(id==='source')el.textContent=el.textContent.replace(' ↗','');if(id==='zoom-in'||id==='zoom-out')el.replaceChildren();el.prepend(icon(name));}const label=document.querySelector('.upload');if(!label.querySelector('.ui-icon'))label.prepend(icon('upload'));}
@@ -445,5 +640,5 @@ function pointName(point){
 window.addEventListener('languagechange',()=>{draw();publishOverlay(true);});
 
 // Restore only supported intervals; storage may be unavailable in private mode.
-try { const saved=localStorage.getItem('aniimo-scan-interval'); if(['250','500','1000','2000','3000'].includes(saved)) $('interval').value=saved; } catch(e) {}
-$('interval').onchange=()=>{try {localStorage.setItem('aniimo-scan-interval',$('interval').value);} catch(e) {}};
+try { const saved=localStorage.getItem('aniimo-scan-interval'); if(['auto','250','500','1000','2000','3000'].includes(saved)) $('interval').value=saved; } catch(e) {}
+$('interval').onchange=()=>{syncQuality();updateCaptureRate();try {localStorage.setItem('aniimo-scan-interval',$('interval').value);} catch(e) {}};

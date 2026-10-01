@@ -46,30 +46,30 @@ class Matcher:
         except Exception as e:
             self.error = str(e)
 
-    def match_crop(self, im, tracking=None, realtime_tracking=True, scene=None):
+    def match_crop(self, im, tracking=None, realtime_tracking=True, scene=None, observation=None):
         sample=self.minimap.extract_crop(im)
         if sample is None:
             return {'requires_full_frame':True}
-        return self.match_minimap(sample, tracking, realtime_tracking, scene)
+        return self.match_minimap(sample, tracking, realtime_tracking, scene, observation)
 
-    def match_minimap(self, sample, tracking, realtime_tracking, scene):
+    def match_minimap(self, sample, tracking, realtime_tracking, scene, observation=None):
         if not realtime_tracking:
             return {'status':'paused','method':'minimap','candidates':[],
                     'player':None,'position_source':None,'loot_observations':[],
                     'reason':'实时定位已关闭；打开大地图仍可识别地图和位置。'}
         tracking=tracking or {}
         with self.lock:
-            answer=self.minimap.match(sample,tracking.get('id'),tracking.get('position'),tracking.get('scale'))
+            answer=self.minimap.match(sample,tracking.get('id'),tracking.get('position'),tracking.get('scale'),observation)
         answer['loot_observations']=detect_rainbow_beams(scene) if scene is not None else []
         return answer
 
-    def match(self, im, anchor=None, tracking=None, outdoor_mode='egg-heist', realtime_tracking=True):
+    def match(self, im, anchor=None, tracking=None, outdoor_mode='egg-heist', realtime_tracking=True, observation=None):
         # Uniform frames cannot contain map geometry; skip costly icon searches.
         if float(np.max(cv2.meanStdDev(im)[1]))<1:
             return {'status':'unknown','candidates':[], 'player':None,'position_source':None,'reason':'画面信息不足，请打开地图并扩大可见区域。'}
         sample=self.minimap.extract(im)
         if sample is not None:
-            return self.match_minimap(sample,tracking,realtime_tracking,im)
+            return self.match_minimap(sample,tracking,realtime_tracking,im,observation)
         player=detect_player(im) if anchor is None else None
         effective_anchor=anchor if anchor is not None else (player['normalized'] if player else None)
         answer=self._match(im,effective_anchor,outdoor_mode)

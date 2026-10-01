@@ -9,6 +9,16 @@ using System.Windows.Forms;
 class PortableLauncher {
     static string L(string zh, string en) { return zh; }
     const string Url = "http://127.0.0.1:18731";
+    const string AppVersion = "0.3.9";
+    static bool SameVersion(string status) {
+        return System.Text.RegularExpressions.Regex.IsMatch(status,
+            "\"version\"\\s*:\\s*\"" + System.Text.RegularExpressions.Regex.Escape(AppVersion) + "\"");
+    }
+    static void Shutdown() {
+        var request=(HttpWebRequest)WebRequest.Create(Url+"/api/shutdown");
+        request.Method="POST";request.ContentLength=0;request.Timeout=5000;
+        using(var response=request.GetResponse()) {}
+    }
     static string Status() {
         try {
             var request = (HttpWebRequest)WebRequest.Create(Url + "/api/status");
@@ -29,7 +39,8 @@ class PortableLauncher {
             Process server;
             try { server=Process.GetProcessById(Int32.Parse(File.ReadAllText(pidFile))); }
             catch(ArgumentException) { return; }
-            if (!String.Equals(server.MainModule.FileName,python,StringComparison.OrdinalIgnoreCase)) {
+            if (!String.Equals(server.MainModule.FileName,python,StringComparison.OrdinalIgnoreCase) &&
+                !String.Equals(server.MainModule.FileName,Path.Combine(root,"runtime","python.exe"),StringComparison.OrdinalIgnoreCase)) {
                 MessageBox.Show(L("当前运行的不是这份便携版，请从对应助手退出。", "A different copy is running. Close it using its own exit launcher."),L("地宫领航", "Aniimo Map Navigator")); return;
             }
             if (!Status().Contains("indexed")) return;
@@ -41,7 +52,11 @@ class PortableLauncher {
                 throw new Exception(L("文件不完整。请先解压整个压缩包，再双击启动助手。", "Files are missing. Extract the entire archive before starting the helper."));
             var status=Status();
             if (status.Contains("indexed") && status.Contains("version")) {
-                Process.Start(new ProcessStartInfo(Url){UseShellExecute=true}); return;
+                if (SameVersion(status)) { Process.Start(new ProcessStartInfo(Url){UseShellExecute=true}); return; }
+                if (MessageBox.Show("检测到其他版本助手正在运行。是否切换到 v"+AppVersion+"？\n\n切换会关闭旧版后台与悬浮窗，之后需要重新选择游戏窗口。", "切换助手版本", MessageBoxButtons.YesNo, MessageBoxIcon.Question)!=DialogResult.Yes) return;
+                Shutdown();
+                for(int i=0;i<40 && Status()!="";i++) Thread.Sleep(100);
+                if(Status()!="") throw new Exception("旧版尚未退出，请稍后重新启动。");
             }
             var info=new ProcessStartInfo(python,"-X utf8 \""+Path.Combine(app,"server.py")+"\" --no-browser") {
                 WorkingDirectory=app,UseShellExecute=false,CreateNoWindow=true
