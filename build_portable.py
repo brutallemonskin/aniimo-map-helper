@@ -34,7 +34,7 @@ for item in (ROOT/'vendor').iterdir():
     if item.is_dir():shutil.copytree(item,RUNTIME/'Lib/site-packages'/item.name,ignore=shutil.ignore_patterns('__pycache__','tests','test','*.pyc'))
 compiler=Path('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe')
 for output,defines in [('启动助手.exe',[]),('退出助手.exe',['/define:STOP'])]:
-    subprocess.run([str(compiler),'/nologo','/target:winexe','/reference:System.Windows.Forms.dll','/out:'+str(OUTPUT/output),*defines,str(ROOT/'portable_launcher.cs')],check=True)
+    subprocess.run([str(compiler),'/nologo','/target:winexe','/reference:System.Windows.Forms.dll','/reference:System.Management.dll','/out:'+str(OUTPUT/output),*defines,str(ROOT/'portable_launcher.cs'),str(ROOT/'exit_all.cs')],check=True)
 (OUTPUT/'使用说明.txt').write_text('''伊莫 · 地宫领航 便携版 v0.3.9（Windows 10/11 x64）
 
 启动时若有其他版本正在运行，会询问是否切换；同意后需重新选择游戏窗口。
@@ -46,7 +46,7 @@ for output,defines in [('启动助手.exe',[]),('退出助手.exe',['/define:STO
 4. 进入地宫后打开大地图，确认地图和角色位置；关闭后由小地图继续追踪。
 5. 点击“游戏悬浮窗”可在游戏上方显示地图。保持网页与共享开启。
 6. 拖动悬浮窗标题栏移动，拖动边缘或右下角等比例缩放，大小和位置自动记忆；− / + 调整透明度；Alt+Shift+M 切换鼠标穿透；Alt+Shift+H 隐藏/显示。
-7. 用完后双击“退出助手.exe”，关闭后台服务和悬浮窗，释放内存及 18731 端口。仅关闭网页会停止该页面的共享与识别，但后台服务仍在运行。
+7. 用完后双击“退出助手.exe”，退出本机当前桌面会话内所有目录、所有版本的助手后台、本地采集与悬浮窗，释放相关端口；无需从原目录退出。不批量结束其他 Python 程序。浏览器分享请同时点“停止共享”或关闭助手标签页。
 
 地图点位中的“图标大小”可选 50%、70%、85%、100%、125%；默认 85%，网页与悬浮窗同步，选择自动保存。
 “实时定位”开关可暂停小地图追踪和彩虹掉落检测，保留当前位置；关闭时最快每秒检查一次大地图。重新开启请打开大地图校准。

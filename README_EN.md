@@ -13,7 +13,7 @@ A local map companion for Aniimo's Egg Heist mode on Windows 10/11 x64.
 5. Enter a dungeon and open the full game map to identify the map and calibrate your position.
 6. Close the game map to continue tracking from the minimap. Keep the helper and screen sharing running.
 7. Use **Game overlay** to display the translucent map over the game.
-8. Use **New run** when starting another run. Double-click **退出助手.exe** (Exit helper) when finished.
+8. Use **New run** when starting another run. Double-click **退出助手.exe** (Exit helper) when finished. It closes helper services and overlays across folders and versions in your current desktop session, including native capture; unrelated Python programs are preserved. Close the helper browser tabs or stop browser sharing separately.
 
 The language menu switches instantly without resetting the current map or player position. Your selection is saved in this browser; first use defaults to Chinese.
 

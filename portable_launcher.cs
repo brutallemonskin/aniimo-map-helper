@@ -34,19 +34,7 @@ class PortableLauncher {
         var python = Path.Combine(root,"runtime","pythonw.exe");
         try {
 #if STOP
-            var pidFile = Path.Combine(app,"server.pid");
-            if (!File.Exists(pidFile)) return;
-            Process server;
-            try { server=Process.GetProcessById(Int32.Parse(File.ReadAllText(pidFile))); }
-            catch(ArgumentException) { return; }
-            if (!String.Equals(server.MainModule.FileName,python,StringComparison.OrdinalIgnoreCase) &&
-                !String.Equals(server.MainModule.FileName,Path.Combine(root,"runtime","python.exe"),StringComparison.OrdinalIgnoreCase)) {
-                MessageBox.Show(L("当前运行的不是这份便携版，请从对应助手退出。", "A different copy is running. Close it using its own exit launcher."),L("地宫领航", "Aniimo Map Navigator")); return;
-            }
-            if (!Status().Contains("indexed")) return;
-            var request=(HttpWebRequest)WebRequest.Create(Url+"/api/shutdown");
-            request.Method="POST"; request.ContentLength=0; request.Timeout=5000;
-            using(var response=request.GetResponse()) {}
+            ExitAll.Stop();
 #else
             if (!File.Exists(python) || !File.Exists(Path.Combine(app,"server.py")))
                 throw new Exception(L("文件不完整。请先解压整个压缩包，再双击启动助手。", "Files are missing. Extract the entire archive before starting the helper."));
