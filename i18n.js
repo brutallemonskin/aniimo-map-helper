@@ -1,6 +1,9 @@
 /* Presentation-only localization: map IDs, coordinates and matching stay unchanged. */
 const I18N = (() => {
  const pairs = {
+ '限时挑战':'Timed Challenge','限时挑战（候选位置）':'Timed Challenge (possible location)','限时挑战（参考位置）':'Timed Challenge (reference location)',
+ '限时挑战位置参考小队模式资料；多点为候选位置，以本局为准。':'Challenge locations reference Team Mode data. Multiple markers are alternatives; check your current run.',
+ '本地采集已连接（兼容模式），请打开游戏大地图校准。':'Local capture connected (compatibility mode). Open the game map to calibrate.',
  '本地采集（试用）':'Local capture (trial)','本地低开销采集':'Local low-overhead capture',
  '请选择游戏窗口':'Select the game window','游戏窗口':'Game window','刷新列表':'Refresh list','连接':'Connect','取消':'Cancel',
  '正在读取可用窗口…':'Loading available windows…',
@@ -15,7 +18,11 @@ const I18N = (() => {
  '视频帧暂未更新，已保留位置。请确认游戏未最小化；画面恢复后会自动继续，持续无画面时请重新选择窗口。':'No new video frames; position held. Keep the game visible. Tracking resumes when frames arrive; select the window again if needed.',
  '识别等待超时或已停止，下一次读取会自动重试':'Recognition timed out or stopped; the next scan retries automatically',
 
+ "快捷键设置":"Keyboard shortcuts","快捷键可在下方自定义":"Customize shortcuts below","鼠标穿透":"Click-through","隐藏 / 显示":"Hide / show","增加不透明度":"More opaque","增加透明度":"More transparent","组合键":"Modifiers","按键":"Key","保存快捷键":"Save shortcuts","恢复默认":"Restore defaults","未启用":"Unavailable","正在读取快捷键设置…":"Loading shortcuts…","正在应用快捷键…":"Applying shortcuts…","快捷键已生效":"Shortcuts are active","设置已保存，开启悬浮窗后生效":"Saved; takes effect when the overlay opens","无法读取快捷键设置，请检查本地服务":"Could not load shortcuts; check the local helper","快捷键不能重复，请为每项选择不同组合":"Use a different shortcut for each action","修改后点击保存快捷键":"Click Save shortcuts to apply your changes","正在应用快捷键，请稍后再试":"Shortcuts are being applied; try again shortly","快捷键被占用或不可用：":"Shortcut already in use or unavailable: ","；已保留原来的可用快捷键":"; previous working shortcuts retained","；部分原快捷键也已被占用，请重新设置":"; some old shortcuts are also unavailable; choose new combinations","；其他可用快捷键已启用":"; other available shortcuts remain active","快捷键已应用，但保存失败；请检查助手目录是否可写":"Applied, but could not save; check that the helper folder is writable","悬浮窗开启时生效，关闭后释放。请避开游戏常用组合；被占用时会提示。↑ 更不透明，↓ 更透明。":"Active while the overlay is open. Avoid game shortcuts; conflicts will be reported. Up increases opacity; Down increases transparency.",
  "已确认偏航，正在重新规划":"Deviation confirmed; replanning",
+ "正在更新剩余蛋巢路线":"Updating the remaining nest tour",
+ "新路线暂不可用，保留原路线并自动重试":"Keeping the previous route; retrying automatically",
+ "路线暂不可用，将自动重试":"Route unavailable; retrying automatically",
 "蛋巢遍历路线":"Egg nest tour",
 "规划 / 重新规划路线":"Plan / replan tour",
 "点击地图点位可标记已拾取":"Click a marker to mark it collected",

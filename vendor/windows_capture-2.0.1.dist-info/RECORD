@@ -1,7 +1,8 @@
-windows_capture/__init__.py,sha256=qeO_Dy5RCqTp4ZULEuUQpmlgAHjsS1Yw9_-9I2Ivxfo,13294
-windows_capture/windows_capture.pyd,sha256=lGTlpqBemAQY7qtrOndEQbTHN7pr1Zb_DR7q0-SL96o,534016
+windows_capture/__init__.py,sha256=HemPdE4HnVK_008NUhQFQnOMhcc96f7lYs1wOojQhQ8,14128
+windows_capture/windows_capture.pyd,sha256=eVRjbhtc3YtbjxC1xX-7vIfQOelMWu8dqAn-lXG3A48,538624
 windows_capture-2.0.1.dist-info/METADATA,sha256=cuL5_YFWECsIhI4nlKC8mJtIGkK0pcgh5o7uq4h4i-o,4899
 windows_capture-2.0.1.dist-info/WHEEL,sha256=_rgZdQc9sLFEqt2IemX7qyxsGt5fFRnBDATxGzerdmg,95
 windows_capture-2.0.1.dist-info/licenses/LICENCE,sha256=4R7_aB9vDrdtvqV4exANZG5OtdcR5Qy1yQMllfbKamg,1091
 windows_capture-2.0.1.dist-info/sboms/windows-capture-python.cyclonedx.json,sha256=J-FqyvfJj3fvr0Fl_nh8jOlh1kN_EzjPFcs6zZUbO1A,48312
 windows_capture-2.0.1.dist-info/RECORD,,
+windows_capture/ANIIMO_PATCH.txt,sha256=q36RBUBnHLWiQfyV1-N_ApAaEPsrN0ABRz9eWEy6Xuc,713

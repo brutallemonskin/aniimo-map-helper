@@ -6,9 +6,10 @@ let captureKind='full',lastFullFrameAt=-Infinity,lastCaptureSize='';
 let observationSession=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),observationSequence=0;
 const cadence=new NavigatorTools.AdaptiveCadence(),journal=new NavigatorTools.RunJournal(),routeFollower=new NavigatorTools.RouteFollower();
 let recoveryActive=false,navEnabled=false,navTarget=null,selectedPoint=null,navPath=[],navRequest=0,navBusy=false,navAt=0,navOrigin=null,navMessage='',navStops=[],navUnreachable=[];
+let navPending=false,navRetryAt=0,navController=null;
 function writeText(id,value){const el=$(id);if(el.textContent!==value)el.textContent=value;}
 function effectiveInterval(){return $('interval').value==='auto'?cadence.interval:Number($('interval').value)||250;}
-function resetNavigation(){routeFollower.reset();journal.reset();cadence.reset();navRequest++;navTarget=null;selectedPoint=null;navPath=[];navStops=[];navUnreachable=[];navOrigin=null;navAt=0;navMessage='';recoveryActive=false;}
+function resetNavigation(){clearRoute();journal.reset();cadence.reset();selectedPoint=null;recoveryActive=false;}
 function syncQuality(){
  const active=result?.position&&result.id===current?.id&&!result.held;
  const state=!realtimeTracking?'off':active?'tracking':lastKnown?(recoveryActive?'recovering':'held'):'uncalibrated';
@@ -17,31 +18,44 @@ function syncQuality(){
  writeText('quality-detail',state==='tracking'?t('仅根据已确认画面更新位置'):lastKnown?t('距上次确认')+' '+Math.max(0,Math.floor((Date.now()-trackedAt)/1000))+' s':t('打开游戏大地图以确认本局起点'));
  writeText('performance-status',($('interval').value==='auto'?t('自动调节')+': '+(effectiveInterval()/1000)+' s · ':t('手动间隔')+' · ')+t('最近处理耗时')+' '+Math.round(cadence.cost)+' ms');
 }
-function clearRoute(message=''){routeFollower.reset();navRequest++;navTarget=null;navPath=[];navStops=[];navUnreachable=[];navOrigin=null;navAt=0;navMessage=message;}
+function clearRoute(message=''){routeFollower.reset();navRequest++;navController?.abort();navPending=false;navRetryAt=0;navTarget=null;navPath=[];navStops=[];navUnreachable=[];navOrigin=null;navAt=0;navMessage=message;}
+function refreshRoute(){
+ // Keep the last valid remainder until a replacement has been confirmed.
+ navRequest++;navController?.abort();navPending=navEnabled;navRetryAt=0;navAt=0;
+ const targets=selectableTargets(),keys=new Set(targets.map(NavigatorTools.pointKey));
+ navStops=navStops.filter(s=>keys.has(s.key));navUnreachable=navUnreachable.filter(k=>keys.has(k));
+ if(navTarget&&!keys.has(NavigatorTools.pointKey(navTarget)))navTarget=targets.find(p=>NavigatorTools.pointKey(p)===navStops[0]?.key)||null;
+ draw();updateRoute(true);
+}
 function selectableTargets(){
  if(!current)return [];
  return (current.displayPoints||current.points).filter(p=>p.category==='egg-nests'&&!journal.picked(current.id,p));
 }
 async function updateRoute(force=false){
+ if(force&&navEnabled){navPending=true;navRetryAt=0;}
  if(!navEnabled||navBusy||!current?.id.startsWith('sanctum-')||!result?.position||result.id!==current.id||result.held)return;
  const now=Date.now(),position=[...result.position];
- if(!force&&now-navAt<2000)return;
+ if(!force&&(now-navAt<2000||now<navRetryAt))return;
  const reroute=!!navOrigin;
- if(!force&&reroute&&!routeFollower.shouldReplan(position,now))return;
+ if(!force&&reroute&&!navPending&&!routeFollower.shouldReplan(position,now))return;
  const targets=selectableTargets();
- if(!targets.length){navMessage='本图蛋巢已全部完成或暂无蛋巢';navPath=[];navStops=[];navTarget=null;navOrigin=position;renderNavigation();return;}
- navBusy=true;navAt=now;routeFollower.attempt(position,now);const token=++navRequest,map=current.id,run=generation;
- navMessage=reroute?'已确认偏航，正在重新规划':'正在计算参考路线';renderNavigation();
+ if(!targets.length){clearRoute('本图蛋巢已全部完成或暂无蛋巢');navOrigin=position;navAt=now;renderNavigation();return;}
+ navBusy=true;navPending=true;navAt=now;routeFollower.attempt(position,now);const token=++navRequest,map=current.id,run=generation;
+ const controller=new AbortController();navController=controller;const timeout=setTimeout(()=>controller.abort(),15000);
+ navMessage=reroute?'正在更新剩余蛋巢路线':'正在计算参考路线';renderNavigation();
  try{
-   const response=await fetch('/api/route',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({map,position,mode:'egg-tour',targets:targets.map(p=>({key:NavigatorTools.pointKey(p),position:[p.x,p.y]}))})});
+   const response=await fetch('/api/route',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({map,position,mode:'egg-tour',targets:targets.map(p=>({key:NavigatorTools.pointKey(p),position:[p.x,p.y]}))})});
   const out=await response.json();if(!response.ok)throw Error(out.error||'路线暂不可用');
   if(token!==navRequest||run!==generation||map!==current?.id||!navEnabled||result?.held)return;
-  navOrigin=position;routeFollower.set(out.status==='ok'?out.path:[],position,Date.now());
+  const liveKeys=new Set(targets.map(NavigatorTools.pointKey)),nextKeys=new Set((out.stops||[]).map(s=>s.key));
+  const losesRemainder=navPath.length>1&&navStops.some(s=>liveKeys.has(s.key)&&!nextKeys.has(s.key));
+  if(out.status!=='ok'||!out.path?.length||losesRemainder)throw Error(out.reason||'路线暂不可用');
+  navPending=false;navRetryAt=0;navOrigin=position;routeFollower.set(out.path,position,Date.now());
   if(result?.position)routeFollower.observe(result.position,Date.now());navPath=routeFollower.remaining();navStops=out.stops||[];navUnreachable=out.unreachable||[];
   navMessage=out.status==='ok'?(out.exact?'底图最短遍历路线':'底图优化遍历路线'):out.reason;
   navTarget=out.status==='ok'?targets.find(p=>NavigatorTools.pointKey(p)===out.target)||null:null;
- }catch(e){if(token===navRequest){navOrigin=position;navMessage='路线暂不可用，请稍后重试';}}
- finally{navBusy=false;draw();}
+ }catch(e){if(token===navRequest&&run===generation&&map===current?.id){navPending=true;navRetryAt=Date.now()+5000;navMessage=navPath.length?'新路线暂不可用，保留原路线并自动重试':'路线暂不可用，将自动重试';}}
+ finally{clearTimeout(timeout);if(navController===controller)navController=null;navBusy=false;draw();}
 }
 function renderNavigation(){
  const data=current?journal.map(current.id):{picked:new Map()},picked=data.picked.size;
@@ -72,9 +86,9 @@ function paintNavigation(context,z){
 }
 function choosePoint(point){selectedPoint={map:current.id,point};renderNavigation();}
 $('route-enabled').onchange=()=>{navEnabled=$('route-enabled').checked;clearRoute();draw();if(navEnabled)updateRoute(true);};
-$('nav-next').onclick=()=>{navEnabled=true;$('route-enabled').checked=true;selectedPoint=null;clearRoute();draw();updateRoute(true);};
-$('nav-pick').onclick=()=>{const p=selectedPoint?.map===current?.id?selectedPoint.point:navTarget;if(!p||!current)return;journal.pick(current.id,p);selectedPoint=null;clearRoute();draw();updateRoute(true);};
-$('nav-undo').onclick=()=>{if(current)journal.undo(current.id);clearRoute();draw();updateRoute(true);};
+$('nav-next').onclick=()=>{navEnabled=true;$('route-enabled').checked=true;selectedPoint=null;refreshRoute();};
+$('nav-pick').onclick=()=>{const p=selectedPoint?.map===current?.id?selectedPoint.point:navTarget;if(!p||!current)return;journal.pick(current.id,p);selectedPoint=null;refreshRoute();};
+$('nav-undo').onclick=()=>{if(current)journal.undo(current.id);refreshRoute();};
 $('trail-enabled').onchange=()=>{draw();publishOverlay(true);};
 $('hide-picked').onchange=()=>{draw();publishOverlay(true);};
 
@@ -224,7 +238,7 @@ $('overlay').onclick=async()=>{
  catch(e){$('overlay-hint').textContent='悬浮窗未启动：'+e.message;}finally{$('overlay').disabled=false;}
 };
 async function overlayStatus(){
- try{const response=await fetch('/api/overlay');if(response.ok){const state=await response.json();const justOpened=!overlayEnabled&&state.enabled;overlayEnabled=state.enabled;overlayButton();if(justOpened){overlaySentKey='';await publishOverlay(true);}}}
+ try{const response=await fetch('/api/overlay');if(response.ok){const state=await response.json();window.OverlayHotkeys?.sync(state.hotkeys);const justOpened=!overlayEnabled&&state.enabled;overlayEnabled=state.enabled;overlayButton();if(justOpened){overlaySentKey='';await publishOverlay(true);}}}
  catch(e){}setTimeout(overlayStatus,2500);
 }
 // Display regions are approximate island extents on the shared atlas, not game boundaries.
@@ -291,7 +305,7 @@ const ICON_PATHS={
 };
 const iconPaths=Object.fromEntries(Object.entries(ICON_PATHS).map(([k,v])=>[k,new Path2D(v)]));
 function icon(name){const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('class','ui-icon');svg.setAttribute('aria-hidden','true');const p=document.createElementNS(svg.namespaceURI,'path');p.setAttribute('d',ICON_PATHS[name]||ICON_PATHS.diamond);svg.append(p);return svg;}
-const POINT_ASSETS={"egg-nests": "/data/icons/95ea407d9709.webp", "merchants": "/data/icons/37cf1b3a107a.webp", "chests-legendary": "/data/icons/142526bf6d00.webp", "chests-epic": "/data/icons/142526bf6d00.webp", "chests-rare": "/data/icons/142526bf6d00.webp", "chests-uncommon": "/data/icons/142526bf6d00.webp", "teleporters": "/data/icons/76e54419740c.webp", "extraction": "/data/icons/d22c145ac350.webp", "giant-egg": "/data/icons/5859f8149869.webp", "coin-monsters": "/data/icons/e809a83f987c.webp", "egg-boats": "/data/icons/9a84fb851b88.webp", "rare-chests": "/data/icons/4e231d9f5c79.webp", "chests": "/data/icons/142526bf6d00.webp", "collectibles": "/data/icons/94eef2370f56.webp", "entrance": "/data/icons/88283228aef0.webp", "side-entrance": "/data/icons/door-side-game.webp", "key-rooms-gold": "/data/icons/key-gold-game.webp", "key-rooms-purple": "/data/icons/key-purple-game.webp", "key-rooms-blue": "/data/icons/key-blue-game.webp"};
+const POINT_ASSETS={"unique-rooms":"/data/icons/special-room-monster.webp","timed-challenges":"/data/icons/timed-challenge.webp","egg-nests": "/data/icons/95ea407d9709.webp", "merchants": "/data/icons/37cf1b3a107a.webp", "chests-legendary": "/data/icons/142526bf6d00.webp", "chests-epic": "/data/icons/142526bf6d00.webp", "chests-rare": "/data/icons/142526bf6d00.webp", "chests-uncommon": "/data/icons/142526bf6d00.webp", "teleporters": "/data/icons/76e54419740c.webp", "extraction": "/data/icons/d22c145ac350.webp", "giant-egg": "/data/icons/5859f8149869.webp", "coin-monsters": "/data/icons/e809a83f987c.webp", "egg-boats": "/data/icons/9a84fb851b88.webp", "rare-chests": "/data/icons/4e231d9f5c79.webp", "chests": "/data/icons/142526bf6d00.webp", "collectibles": "/data/icons/94eef2370f56.webp", "entrance": "/data/icons/88283228aef0.webp", "side-entrance": "/data/icons/door-side-game.webp", "key-rooms-gold": "/data/icons/key-gold-game.webp", "key-rooms-purple": "/data/icons/key-purple-game.webp", "key-rooms-blue": "/data/icons/key-blue-game.webp"};
 const CREATURE_ASSETS={"幽黯云朵羊": "/data/icons/4994391e97ee.png", "幽黯冰刃狼": "/data/icons/dfe252f67d0c.png", "幽黯刺剑玫": "/data/icons/84e60a3f66de.png", "幽黯吊灯水母": "/data/icons/79bd1ad167cb.png", "幽黯土堡蚁": "/data/icons/2171bbd97e59.png", "幽黯埋埋": "/data/icons/e5446840d6f1.png", "幽黯大号鸥": "/data/icons/5f9ce11d8c81.png", "幽黯大眼盔": "/data/icons/8f9776cc8593.png", "幽黯小号鸥": "/data/icons/909daeddac19.png", "幽黯小哭苞": "/data/icons/903de297cc12.png", "幽黯小炭犬": "/data/icons/c23b1e09b1bd.png", "幽黯巫帽草": "/data/icons/f5a868340d22.png", "幽黯幻焰灵": "/data/icons/c1179f63d0ca.png", "幽黯幻翼蝶": "/data/icons/b406f9758b0c.png", "幽黯幽幽焰": "/data/icons/dcd9bb40480e.png", "幽黯幽爪镰": "/data/icons/5623dea84982.png", "幽黯星乐蒂": "/data/icons/9aad1c57cef6.png", "幽黯星骑士": "/data/icons/2286b85297c5.png", "幽黯星魔师": "/data/icons/81c264b13943.png", "幽黯星魔师首领": "/data/icons/81c264b13943.png", "幽黯晶背龙": "/data/icons/7f77927e89f0.png", "幽黯暴睡熊": "/data/icons/c77ac145bff0.png", "幽黯泡泡獭": "/data/icons/a9dc19959d38.png", "幽黯淬刃螳螂": "/data/icons/5b7f86048ec2.png", "幽黯滚滚郎": "/data/icons/c7c8c39a278e.png", "幽黯漂漂獭": "/data/icons/17cc8d83695e.png", "幽黯灯泡水母": "/data/icons/0cadbed822c1.png", "幽黯灯纱水母": "/data/icons/956a879b48cd.png", "幽黯焚火狼": "/data/icons/1d4eaa852ea6.png", "幽黯狼斗士": "/data/icons/70ea1cf56079.png", "幽黯盔勇士": "/data/icons/1465c981c213.png", "幽黯盔卫士": "/data/icons/8977d2fd51e3.png", "幽黯簇晶脊龙": "/data/icons/be08406cc613.png", "幽黯胖胖獭": "/data/icons/9f90243c1466.png", "幽黯花舞兰": "/data/icons/7f158c15c70e.png", "幽黯花芽蟹": "/data/icons/1738c600e48d.png", "幽黯莲冠龙": "/data/icons/ef43e9a470f7.png", "幽黯莲顶鱼": "/data/icons/8a65d7c5dd91.png", "幽黯莹冰龙": "/data/icons/ed6f3598996e.png", "幽黯蓬蓬羊": "/data/icons/fde84557c7a4.png", "幽黯蟹葱葱": "/data/icons/398749ecc6e7.png", "幽黯走调草": "/data/icons/d272972c4aae.png", "幽黯迷梦崽": "/data/icons/85d4e12fd80e.png", "幽黯长号鸥": "/data/icons/27c1cb61beff.png", "幽黯雷光貂": "/data/icons/96ed2fa1fb58.png", "幽黯顽皮鱼": "/data/icons/fe5cada52134.png", "幽黯飘飘花": "/data/icons/c99ef19f1737.png", "幽黯香氛鸟": "/data/icons/b3f1f161c723.png", "幽黯魅乐薇": "/data/icons/6c6f3c8e7b25.png", "幽黯碎岩仔": "/data/icons/official-rockling.png"};
 const pointImages=new Map();
 const pendingPortraits=new Map();
@@ -326,7 +340,7 @@ function markerStyle(category,color,name){
   'chests-rare':['#5aa9ff',18,'蓝箱','BC','蓝','B'],'rare-chests':['#5aa9ff',18,'蓝箱','BC','蓝','B'],'chests-uncommon':['#7ee3c0',18,'绿箱','UC','绿','U'],chests:['#ffc662',18,'宝箱','CH'],
   'key-rooms-gold':['#ffd36b',20,'金钥匙房','GK'],'key-rooms-purple':['#b892ff',20,'紫钥匙房','PK'],'key-rooms-blue':['#4ec3ff',20,'蓝钥匙房','BK'],
   merchants:['#8ee0c4',20,'商人','SH'],aniimo:['#ef9aab',18,'伊莫','AN'],'aniimo-spawns':['#ef9aab',18,'伊莫','AN'],
-  rooms:['#acbbc9',17,'房间','RM'],'unique-rooms':['#c9acff',20,'特殊','SP'],'coin-monsters':['#ffd36b',18,'金币','CO'],collectibles:['#8ee0c4',18,'采集','IT']
+  rooms:['#acbbc9',17,'房间','RM'],'unique-rooms':['#c9acff',20,'特殊','SP'],'timed-challenges':['#8fdcff',22,'挑战','TC'],'coin-monsters':['#ffd36b',18,'金币','CO'],collectibles:['#8ee0c4',18,'采集','IT']
  };
  const [defaultColor,size,zh,en,badgeZh,badgeEn]=styles[category]||['#d7e2ed',18,'点位','PT'];
  const creature=category==='aniimo'||category==='aniimo-spawns';
@@ -337,8 +351,10 @@ function pointLegendIcon(style){
  const text=document.createElement('span');text.className='map-category-text';text.setAttribute('aria-hidden','true');return text;
 }
 function drawOriginalPoint(p,style,ctx,zoom,markerScale){
- const size=style.size*1.4*markerScale,image=pointImages.get(style.asset);
- ctx.save();ctx.translate(p.x,p.y);ctx.scale(1/zoom,1/zoom);
+ const size=style.size*1.4,image=pointImages.get(style.asset);
+ // Scale the complete marker, including fallback text, badges and outlines.
+ // A high-resolution overlay must not shrink fixed-size text on downsampling.
+ ctx.save();ctx.translate(p.x,p.y);ctx.scale(markerScale/zoom,markerScale/zoom);
  if(image){
    const bounds=POINT_RECTS[style.asset.split('/').pop()]||[0,0,image.naturalWidth||image.width||100,image.naturalHeight||image.height||100];
    const [left,top,right,bottom]=bounds,sw=right-left,sh=bottom-top,ratio=size/Math.max(sw,sh),dw=sw*ratio,dh=sh*ratio;
@@ -375,8 +391,9 @@ async function loadMap(id){
  const d=await fetch('/data/'+id+'.json',{cache:'no-store'}).then(r=>r.json());
  const im=new Image();im.src=d.image;await im.decode();if(requestVersion!==mapLoadVersion)return;current=d;current.displayPoints=uniqueMapPoints(d.points);bitmap=im;
  const measure=document.createElement('canvas');measure.width=256;measure.height=256;const mc=measure.getContext('2d');mc.drawImage(im,0,0,256,256);const pixels=mc.getImageData(0,0,256,256).data;let left=256,top=256,right=0,bottom=0;for(let y=0;y<256;y++)for(let x=0;x<256;x++){const i=(y*256+x)*4;if((pixels[i]+pixels[i+1]+pixels[i+2])/3>85){left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}}mapBounds=right>left?{x:Math.max(0,left-8)*d.width/256,y:Math.max(0,top-8)*d.height/256,w:Math.min(256,right-left+16)*d.width/256,h:Math.min(256,bottom-top+16)*d.height/256}:{x:0,y:0,w:d.width,h:d.height};
- enabled=new Set(d.categories.filter(c=>pointVisibility.has(c.id)?pointVisibility.get(c.id):/egg|entrance|legendary|key-room|sanctums|teleporters|extraction/.test(c.id)).map(c=>c.id));
+ enabled=new Set(d.categories.filter(c=>pointVisibility.has(c.id)?pointVisibility.get(c.id):/egg|entrance|legendary|key-room|sanctums|teleporters|extraction|timed-challenges/.test(c.id)).map(c=>c.id));
  loadMapCreatures(current).then(()=>{if(current===d){draw();publishOverlay(true);}});
+ if($('challenge-note'))$('challenge-note').hidden=!d.challengeSource;
  $('filters').replaceChildren();for(const c of d.categories){const l=document.createElement('label'), i=document.createElement('input'),style=markerStyle(c.id,c.color);i.type='checkbox';i.checked=enabled.has(c.id);i.onchange=()=>setPointVisibility(c.id,i.checked);l.append(i,pointLegendIcon(style),document.createTextNode(style.label||c.name));l.style.color=style.color;$('filters').append(l);}
  $('mapinfo').textContent=`${d.name} · ${d.width} × ${d.height} · ${current.displayPoints.length} 条点位`;fit();
 }
@@ -485,7 +502,7 @@ $('native-connect').onclick=async()=>{
  try{const out=await nativeRequest({action:'start',window:windowId,interval:captureInterval()});
   if(epoch!==captureEpoch){nativeRequest({action:'stop',session:out.session}).catch(()=>{});return;}
   nativeSession=out.session;nativeSequence=0;nativePreviewAt=-Infinity;receivedCaptureFrame=false;firstFrameDeadline=performance.now()+12000;
-  running=true;newRun();notice('本地采集已连接，请打开游戏大地图校准。');tick(epoch);
+  running=true;newRun();notice(out.capture_mode==='compatible'?'本地采集已连接（兼容模式），请打开游戏大地图校准。':'本地采集已连接，请打开游戏大地图校准。');tick(epoch);
  }catch(e){if(epoch!==captureEpoch)return;stop();notice(e.message);}
 };
 

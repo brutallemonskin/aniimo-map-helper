@@ -9,6 +9,7 @@ import math
 import copy
 from pathlib import Path
 from PIL import Image
+from hotkeys import HotkeySettings
 
 
 class OverlayBridge:
@@ -24,10 +25,14 @@ class OverlayBridge:
         self.map_key = ''
         self.player = None
         self.navigation = None
+        self.hotkeys = HotkeySettings(root)
+        self.hotkeys_running = False
 
     def status(self):
         with self.lock:
-            return {'enabled': self.process is not None and self.process.poll() is None,
+            enabled=self.process is not None and self.process.poll() is None
+            if not enabled and self.hotkeys_running:self.hotkeys.stopped();self.hotkeys_running=False
+            return {'enabled': enabled,'hotkeys':self.hotkeys.status(),
                     'title': self.title, 'language': self.language, 'updated': self.updated, 'version': self.version}
 
     def start(self):
@@ -43,6 +48,7 @@ class OverlayBridge:
             self.title = '等待识别地宫'
             self.updated = 0
             self.version += 1
+            self.hotkeys.started();self.hotkeys_running=True
             with (self.root / 'overlay.log').open('ab') as log:
                 self.process = subprocess.Popen(
                     [sys.executable, '-X', 'utf8', str(self.root / 'overlay_window.py')],
@@ -56,6 +62,7 @@ class OverlayBridge:
                 self.process.terminate()
                 self.process.wait(timeout=3)
             self.process = None
+            self.hotkeys.stopped();self.hotkeys_running=False
             self.image = None
             self.map_key = ''
             self.player = None

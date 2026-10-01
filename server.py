@@ -24,13 +24,14 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
     def do_GET(self):
         path=urllib.parse.urlparse(self.path).path
-        if path=='/api/status': return self.json({'ready':matcher.ready,'indexed':len(matcher.maps),'error':matcher.error,'version':'0.3.9'})
+        if path=='/api/status': return self.json({'ready':matcher.ready,'indexed':len(matcher.maps),'error':matcher.error,'version':'0.4'})
         if path=='/api/overlay': return self.json(overlay.status())
+        if path=='/api/overlay/hotkeys': return self.json(overlay.status()['hotkeys'])
         if path=='/api/overlay/frame':
             query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             return self.json(overlay.snapshot(query.get('image_key',[None])[0]))
         if path=='/': self.path='/index.html'
-        elif path not in ('/index.html','/app.js','/assist.js','/style.css','/i18n.js') and not (path.startswith('/data/') and '..' not in urllib.parse.unquote(path)):
+        elif path not in ('/index.html','/app.js','/assist.js','/hotkey-settings.js','/style.css','/i18n.js') and not (path.startswith('/data/') and '..' not in urllib.parse.unquote(path)):
             return self.send_error(404)
         return super().do_GET()
     def do_POST(self):
@@ -57,6 +58,15 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.json(native.start(d.get('window'),interval))
                 raise ValueError('无效采集操作')
             except Exception as e:return self.json({'error':'本地采集不可用：'+str(e)+'；可改用浏览器分享。'},400)
+        if self.path in ('/api/overlay/hotkeys','/api/overlay/hotkeys/report'):
+            try:
+                n=int(self.headers.get('Content-Length','0'))
+                if not 0<n<4096:raise ValueError('无效快捷键设置')
+                data=json.loads(self.rfile.read(n))
+                if not isinstance(data,dict):raise ValueError('无效快捷键设置')
+                if self.path.endswith('/report'):return self.json(overlay.hotkeys.report(data))
+                return self.json(overlay.hotkeys.configure(data.get('bindings'),overlay.status()['enabled']))
+            except (ValueError,OSError,TypeError) as error:return self.json({'error':str(error)},400)
         if self.path in ('/api/overlay','/api/overlay/frame'):
             try:
                 n=int(self.headers.get('Content-Length','0'))

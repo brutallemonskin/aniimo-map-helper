@@ -1,0 +1,10 @@
+Aniimo local modification of windows-capture 2.0.1 (MIT)
+Upstream: https://github.com/NiiightmareXD/windows-capture
+Commit: c7d106448eb9d9b251345c39047711e1cd408ae2
+Patch: native_build/readback-pacing.patch in the Aniimo helper source.
+Changes: configurable atomic readback interval; skip surplus WGC frames before
+staging allocation, GPU CopyResource/Map, and Python callbacks. Diagnostic counters.
+Accepted frames still read back the whole window; no GPU-region cropping yet.
+Built with Rust 1.99.0 for x86_64-pc-windows-msvc, Python stable ABI 3.9+,
+PyO3 pinned to 0.29.0, Windows SDK 10.0.26100, Microsoft CRT 14.44.
+The original license remains in windows_capture-2.0.1.dist-info/licenses/LICENCE.

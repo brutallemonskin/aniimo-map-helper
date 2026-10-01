@@ -1,0 +1,33 @@
+Native readback-pacing build
+===========================
+
+The portable package includes a patched windows-capture 2.0.1 binary. Do not
+replace it with an unpatched PyPI wheel when testing readback pacing.
+
+1. Obtain upstream c7d106448eb9d9b251345c39047711e1cd408ae2 from
+   https://github.com/NiiightmareXD/windows-capture .
+2. From its root, apply readback-pacing.patch with git apply.
+3. Use Rust 1.99.0 x86_64-pc-windows-msvc and the Microsoft Windows SDK/CRT.
+   The tested SDK is 10.0.26100 and CRT 14.44. Obtain these under their licenses.
+4. In an MSVC build environment, set PYO3_NO_PYTHON=1 and run:
+   cargo +stable-x86_64-pc-windows-msvc build --release --locked
+       --target x86_64-pc-windows-msvc -p windows-capture-python
+   (The command above is one line.) A compatible linker is required.
+   This build used rust-lld.exe from the MSVC Rust toolchain, configured through
+   CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER, with LIB pointing to the SDK um,
+   SDK ucrt and CRT x86_64 library directories.
+5. Copy target/x86_64-pc-windows-msvc/release/windows_capture.dll to
+   vendor/windows_capture/windows_capture.pyd and the patched Python __init__.py
+   from windows-capture-python/windows_capture into that same vendor folder.
+6. Validate imports and actual capture in a separate process before packaging.
+   Preserve the MIT license, ANIIMO_PATCH.txt and updated RECORD hashes.
+
+Only the resulting runtime library is distributed. SDKs, compilers, build caches
+and private tests are not included in the portable ZIP.
+
+The gate is disabled by default (0 ms), preserving upstream behavior. The helper
+sets it before capture starts. Atomic updates support a running compatibility
+stream without restarting it. The first frame passes immediately. Native counters
+record arrivals, pre-map skips, successful readbacks and bytes mapped.
+This patch does not claim to reduce Windows compositor work or implement GPU ROI
+cropping. It reduces application readback, mapping, allocation and callback work.

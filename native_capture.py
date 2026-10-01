@@ -8,6 +8,12 @@ import cv2
 ROOT=Path(__file__).resolve().parent
 if (ROOT/'vendor').is_dir():sys.path.insert(0,str(ROOT/'vendor'))
 
+
+def unsupported_update_interval(error):
+    message=str(error).casefold()
+    return (any(name in message for name in ('minimum update interval','minimum_update_interval','minupdateinterval'))
+            and any(reason in message for reason in ('not supported','unsupported')))
+
 def window_api():
     api=C.WinDLL('user32',use_last_error=True)
     # HTTP handler threads otherwise see DPI-virtualized client coordinates.
@@ -64,6 +70,8 @@ class NativeCapture:
         self.latest=None;self.sequence=0;self.interval=500;self.hwnd=None
         self.last_poll=0;self.closed=False;self.started=0;self.changed=0
         self.next_scan=0;self.scan_condition=threading.Condition()
+        self.minimum_interval_supported=None
+        self.readback_pacing=False
 
     def stop(self,session=None):
         with self.operations:
@@ -79,25 +87,47 @@ class NativeCapture:
 
     def _start_stream(self,interval):
         from windows_capture import WindowsCapture
-        self.epoch+=1;epoch=self.epoch;old=self.control;self.control=None
+        self.epoch+=1;old=self.control;self.control=None
         if old:old.stop()
         with self.lock:self.latest=None
-        self.interval=interval;self.changed=time.monotonic();self.closed=False
-        capture=WindowsCapture(cursor_capture=False,window_hwnd=self.hwnd,
-                               minimum_update_interval=max(125,int(interval/2)))
-        @capture.event
-        def on_frame_arrived(frame,control):
-            now=time.monotonic()
-            if epoch!=self.epoch or now-self.last_poll>20:
-                control.stop();return
-            # Retain just the latest owned mapped frame, not a queue of screenshots.
-            with self.lock:
-                self.sequence+=1
-                self.latest=(frame,self.sequence,time.time()*1000,now)
-        @capture.event
-        def on_closed():
-            if epoch==self.epoch:self.closed=True
-        self.capture=capture;self.control=capture.start_free_threaded()
+        self.interval=interval;self.changed=time.monotonic();self.capture=None
+        def launch(limited):
+            # Separate generations also invalidate callbacks from a failed attempt.
+            self.epoch+=1;epoch=self.epoch;self.closed=False;last_retained=None
+            options={'cursor_capture':False,'window_hwnd':self.hwnd}
+            if limited:options['minimum_update_interval']=max(125,int(interval/2))
+            capture=WindowsCapture(**options)
+            pace=getattr(capture,'set_readback_interval',None)
+            native_pacing=callable(pace)
+            if native_pacing:pace(max(125,int(interval/2)))
+            self.readback_pacing=native_pacing
+            @capture.event
+            def on_frame_arrived(frame,control):
+                nonlocal last_retained
+                now=time.monotonic()
+                if epoch!=self.epoch or now-self.last_poll>20:
+                    control.stop();return
+                # Older unpatched libraries still need a post-readback fallback.
+                # The bundled native gate skips surplus frames before copy/map.
+                with self.lock:
+                    if epoch!=self.epoch:return
+                    if not native_pacing and not limited and last_retained is not None and now-last_retained<max(.125,self.interval/2000):return
+                    last_retained=now;self.sequence+=1
+                    self.latest=(frame,self.sequence,time.time()*1000,now)
+            @capture.event
+            def on_closed():
+                if epoch==self.epoch:self.closed=True
+            self.capture=capture;self.control=capture.start_free_threaded()
+        limited=self.minimum_interval_supported is not False
+        try:launch(limited)
+        except Exception as error:
+            self.epoch+=1;self.capture=None
+            with self.lock:self.latest=None
+            if not limited or not unsupported_update_interval(error):raise
+            self.minimum_interval_supported=False
+            launch(False)
+        else:
+            if limited:self.minimum_interval_supported=True
 
     def start(self,hwnd,interval):
         with self.operations:
@@ -116,7 +146,9 @@ class NativeCapture:
                     with self.operations:
                         if session==self.session and time.monotonic()-self.last_poll>20:self.stop(session)
             threading.Thread(target=expire,daemon=True).start()
-            return {'session':self.session,'title':selected['title']}
+            return {'session':self.session,'title':selected['title'],
+                    'capture_mode':'compatible' if self.minimum_interval_supported is False else 'system_interval',
+                    'readback_pacing':self.readback_pacing}
 
     def wait_next(self,session,interval):
         """Pace long-poll requests here, not in background browser timers."""
@@ -136,7 +168,11 @@ class NativeCapture:
             if not api.IsWindow(self.hwnd) or self.closed:raise ValueError('游戏窗口已关闭或采集已结束，请重新连接。')
             if api.IsIconic(self.hwnd):return None,'窗口已最小化 · 保留位置'
             if interval!=self.interval and self.last_poll-self.changed>=3:
-                self._start_stream(interval)
+                if self.minimum_interval_supported is False:
+                    # A software pacing change needs no capture restart or frame loss.
+                    if self.readback_pacing:self.capture.set_readback_interval(max(125,int(interval/2)))
+                    self.interval=interval;self.changed=self.last_poll
+                else:self._start_stream(interval)
             with self.lock:latest=self.latest
             if latest is None:return None,'等待本地画面'
             frame,sequence,at,arrived=latest

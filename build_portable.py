@@ -8,11 +8,11 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parent
 SOURCE_RUNTIME=Path(sys.executable).parent
-OUTPUT=ROOT/'portable'/'AniimoNavigator-Portable-v0.3.9'
+OUTPUT=ROOT/'portable'/'AniimoNavigator-Portable-v0.4'
 if OUTPUT.exists(): raise SystemExit('Output exists; choose a new version before rebuilding.')
 APP=OUTPUT/'app'; RUNTIME=OUTPUT/'runtime'
 APP.mkdir(parents=True); (RUNTIME/'Lib/site-packages').mkdir(parents=True)
-for name in ('native_capture.py','server.py','image_io.py','matcher.py','loot_detector.py','door_matcher.py','player.py','minimap.py','relocalizer.py','route_planner.py','overlay_bridge.py','overlay_window.py','index.html','app.js','assist.js','i18n.js','style.css'):
+for name in ('hotkeys.py','hotkey-settings.js','native_capture.py','server.py','image_io.py','matcher.py','loot_detector.py','door_matcher.py','player.py','minimap.py','relocalizer.py','route_planner.py','overlay_bridge.py','overlay_window.py','index.html','app.js','assist.js','i18n.js','style.css'):
     shutil.copy2(ROOT/name,APP/name)
 (APP/'data').mkdir()
 catalog=json.loads((ROOT/'data/catalog.json').read_text(encoding='utf-8'))
@@ -35,7 +35,7 @@ for item in (ROOT/'vendor').iterdir():
 compiler=Path('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe')
 for output,defines in [('启动助手.exe',[]),('退出助手.exe',['/define:STOP'])]:
     subprocess.run([str(compiler),'/nologo','/target:winexe','/reference:System.Windows.Forms.dll','/reference:System.Management.dll','/out:'+str(OUTPUT/output),*defines,str(ROOT/'portable_launcher.cs'),str(ROOT/'exit_all.cs')],check=True)
-(OUTPUT/'使用说明.txt').write_text('''伊莫 · 地宫领航 便携版 v0.3.9（Windows 10/11 x64）
+(OUTPUT/'使用说明.txt').write_text('''伊莫 · 地宫领航 便携版 v0.4（Windows 10/11 x64）
 
 启动时若有其他版本正在运行，会询问是否切换；同意后需重新选择游戏窗口。
 首次打开默认中文。可在右上角切换 English，手动选择的语言偏好自动保存。
@@ -46,9 +46,11 @@ for output,defines in [('启动助手.exe',[]),('退出助手.exe',['/define:STO
 4. 进入地宫后打开大地图，确认地图和角色位置；关闭后由小地图继续追踪。
 5. 点击“游戏悬浮窗”可在游戏上方显示地图。保持网页与共享开启。
 6. 拖动悬浮窗标题栏移动，拖动边缘或右下角等比例缩放，大小和位置自动记忆；− / + 调整透明度；Alt+Shift+M 切换鼠标穿透；Alt+Shift+H 隐藏/显示。
+   Alt+Shift+↑ 增加不透明度，Alt+Shift+↓ 增加透明度。“游戏悬浮窗”下展开“快捷键设置”，可修改四项组合，保存后实时生效并记忆。组合被占用时提示冲突并保留原来的可用快捷键；支持恢复默认。
 7. 用完后双击“退出助手.exe”，退出本机当前桌面会话内所有目录、所有版本的助手后台、本地采集与悬浮窗，释放相关端口；无需从原目录退出。不批量结束其他 Python 程序。浏览器分享请同时点“停止共享”或关闭助手标签页。
 
 地图点位中的“图标大小”可选 50%、70%、85%、100%、125%；默认 85%，网页与悬浮窗同步，选择自动保存。
+特殊房间使用怪物图标；限时挑战使用独立的游戏图标，默认显示，可在“地图点位”中关闭。已收录 21 张地宫的 35 个参考位置，来自小队模式资料；多个候选位置不代表同时出现，以当前对局为准。未取得资料的地图不推测挑战点位。两类图标的显示开关与大小均实时同步到悬浮窗。
 “实时定位”开关可暂停小地图追踪和彩虹掉落检测，保留当前位置；关闭时最快每秒检查一次大地图。重新开启请打开大地图校准。
 跑图时优先读取小地图，打开大地图时自动恢复完整画面识别；约每 5 秒随识别周期核对完整画面。彩虹掉落检测使用最长边 800 像素的场景预览。无需额外设置，浏览器仍需共享完整游戏窗口。
 识别与同步改进：补强主门入口识别；小地图失去位置后尝试重新搜索，连续确认后恢复；地图底图缓存，人物位置单独更新。不能确认时仍保留上次位置。
@@ -65,7 +67,7 @@ for output,defines in [('启动助手.exe',[]),('退出助手.exe',['/define:STO
 高清悬浮窗：底图按原始像素传递（最长边上限 2048），直接按实际窗口像素绘制，移除了 700 → 520 → 放大的模糊流程。图标显示比例保持不变，已有图标大小设置仍同步生效。底图与按窗口尺寸缩放的图像会缓存，移动仍只同步人物与路线数据；未变化的画面跳过重绘。不增加截图或识别频率，但高清缓存会增加部分内存占用。原素材本身的细节仍是清晰度上限。
 本版浏览器采集随识别间隔申请 8/4/2/1/1 fps，驱动实际帧率可能不同；无新视频帧时保留位置，画面恢复后自动继续。识别请求等待 15 秒后中断等待并重试，服务端不堆积识别任务。
 移动恢复保留原有地形阈值和歧义检查；较长间隔下接受更大移动前，还需两帧地形运动一致。重复房间、遮挡或高台缺少素材时仍可能暂停定位。
-本地采集使用 Windows Graphics Capture / windows-capture 2.0.1，不需要浏览器屏幕共享。原始图像直接交给本地识别，网页仅接收结果和每秒最多一次的小预览。当前库仍映射整个窗口，尚非纯 GPU 小区域采集；性能收益取决于设备和驱动。原生更新间隔设置取决于 Windows 支持，不兼容时会提示改用浏览器分享。
+本地采集使用 Windows Graphics Capture / windows-capture 2.0.1，不需要浏览器屏幕共享。原始图像直接交给本地识别，网页仅接收结果和每秒最多一次的小预览。本版包含原生采集节流补丁，多余帧在 GPU 读回、内存映射和 Python 回调之前跳过。保留帧仍读取整个窗口，尚非纯 GPU 小区域采集；性能收益取决于设备和驱动。如果系统不支持最小更新间隔，将自动使用兼容模式，仍按所选间隔识别，并使用原生跳帧减少读回开销；切换间隔无需重启兼容采集。兼容模式不能限制 Windows 底层出帧。其他采集错误仍会提示，可改用浏览器分享。
 本地模式的读取节奏由服务端控制，避免普通后台网页定时器降频；仍需保持网页运行。关闭网页、标签页被系统冻结或丢弃后约 20 秒自动释放，需要重新连接。最小化、窗口关闭或无新帧时保留位置，不使用旧画面确认新位置。采集仅在手动选择窗口并连接后开始。停止按钮立即结束采集。
 本版已用独立 Windows 窗口回放真实截图，验证大地图校准转小地图追踪、DPI 裁剪和间隔切换；尚需真实游戏全屏、不同显卡和低配置电脑实测，不能承诺所有设备都更快或解决所有丢失。
 整个文件夹均需保留；无需安装 Python、无需管理员权限、不写入开机启动。

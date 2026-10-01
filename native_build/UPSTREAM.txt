@@ -1,0 +1,3 @@
+https://github.com/NiiightmareXD/windows-capture
+commit c7d106448eb9d9b251345c39047711e1cd408ae2
+MIT; see vendor/windows_capture-2.0.1.dist-info/licenses/LICENCE

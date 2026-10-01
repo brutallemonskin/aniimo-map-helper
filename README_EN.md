@@ -1,4 +1,4 @@
-**[Download v0.3.9](https://github.com/brutallemonskin/aniimo-map-helper/releases/tag/v0.3.9).** This public release consolidates local trials through 0.3.14 under public version 0.3.9.
+**[Download v0.4](https://github.com/brutallemonskin/aniimo-map-helper/releases/tag/v0.4).** Adds configurable overlay shortcuts and challenge markers, preserves remaining routes during replanning, and improves native capture compatibility and readback pacing.
 
 # Aniimo Map Navigator
 
@@ -23,6 +23,8 @@ The language menu switches instantly without resetting the current map or player
 - Use **− / +** to change opacity. Size, position and opacity are saved automatically.
 - **Alt+Shift+M** toggles click-through; unlock it before moving or resizing.
 - **Alt+Shift+H** shows or hides the overlay.
+- **Alt+Shift+Up / Down** makes the overlay more opaque / more transparent.
+- Expand **Keyboard shortcuts** below **Game overlay** to change all four combinations. Save applies immediately while the overlay is open, and preferences persist across restarts. If a combination is unavailable, the previous working shortcuts are restored and the page shows the conflict. **Restore defaults** resets these four shortcuts.
 
 ## Features and limits
 
@@ -99,6 +101,7 @@ Validated with existing screenshots, movement replay, simulated slow processing 
 Overlay mouse capture is released after interrupted dragging/resizing, missed mouse-up, hiding and closing. Simulated input regression passes; the reported Alt+Tab / Windows-key symptom still needs validation on affected hardware. Route progression and debounced deviation replanning are included. Nest collection remains manual; upper-floor support is deferred.
 
 ## Capture reliability and native capture (v0.3.9)
+When the optional minimum update interval is unsupported, capture automatically retries in compatibility mode. Recognition remains paced, and interval changes do not restart that stream. The portable package includes a native patch that skips surplus frames before GPU readback, memory mapping and Python callbacks. It cannot limit Windows frame delivery; accepted frames still read the whole window, and actual savings depend on the device and driver. Other capture failures are still reported. An unmodified capture library retains software pacing but does not provide the pre-readback optimization. Patch source and build instructions are in `native_build/`.
 Browser capture requests follow the recognition interval (8/4/2/1/1 fps). New video frame counters distinguish a stalled stream from a stationary character; 15-second match timeouts retry without queuing inference jobs. Moving recovery requires terrain agreement and, for larger steps, independent inter-frame motion evidence.
 Choose **Local capture (trial)** and explicitly select the game window to use Windows Graphics Capture. Raw images go directly to the local matcher; the page receives results and a small preview at most once per second. The binding still maps the full window, so this is not GPU-only region capture and no performance gain is guaranteed. If the OS or driver does not support the requested native settings, use browser sharing. Native polling is paced by the server rather than background browser timers. Keep the page running; closing, freezing or discarding the tab releases capture after about 20 seconds.
 Validated with an owned Windows window replaying game screenshots, including full-map to minimap transitions and DPI cropping. Live game fullscreen, different GPUs and low-end machines still need field testing.

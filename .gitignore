@@ -5,6 +5,8 @@ __pycache__/
 *.pid
 overlay-settings.json
 overlay-settings.tmp
+overlay-hotkeys.json
+overlay-hotkeys.tmp
 .venv/
 runtime/
 portable/

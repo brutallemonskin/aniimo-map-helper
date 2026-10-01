@@ -231,6 +231,14 @@ class WindowsCapture:
             window_hwnd,
         )
 
+    def set_readback_interval(self, milliseconds: int) -> None:
+        """Skip surplus frames in native code before GPU readback (0 disables gating)."""
+        self.capture.set_readback_interval(milliseconds)
+
+    def readback_stats(self) -> tuple[int, int, int, int]:
+        """Return arrivals, frames skipped before map, mapped frames, and mapped bytes."""
+        return self.capture.readback_stats()
+
     def start(self) -> None:
         """Starts The Capture Thread"""
         if self.frame_handler is None:

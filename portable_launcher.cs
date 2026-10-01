@@ -9,7 +9,7 @@ using System.Windows.Forms;
 class PortableLauncher {
     static string L(string zh, string en) { return zh; }
     const string Url = "http://127.0.0.1:18731";
-    const string AppVersion = "0.3.9";
+    const string AppVersion = "0.4";
     static bool SameVersion(string status) {
         return System.Text.RegularExpressions.Regex.IsMatch(status,
             "\"version\"\\s*:\\s*\"" + System.Text.RegularExpressions.Regex.Escape(AppVersion) + "\"");

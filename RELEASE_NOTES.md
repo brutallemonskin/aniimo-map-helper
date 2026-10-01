@@ -1,3 +1,43 @@
+## v0.4 · 采集性能优化、自定义快捷键与挑战点位
+
+相比正式版 v0.3.9，本版包含以下更新：
+
+- **修复剩余红线消失**：标记蛋巢拾取或重新规划时保留最后有效的剩余路线。新路线暂不可用、请求超时或返回不完整时自动重试，避免还没走完的红线被直接清空。
+- **网页自定义快捷键**：可设置悬浮窗鼠标穿透、隐藏／显示、增加不透明度、增加透明度。保存后立即生效并记忆，支持恢复默认；重复或被占用的组合会提示，应用失败时保留原来的可用快捷键。
+- **精简悬浮窗**：移除底部快捷键提示，给地图更多显示空间；快捷键设置集中在网页“游戏悬浮窗”下方。拖动、缩放和标题栏按钮保留。
+- **本地采集兼容修复**：遇到系统不支持 `minimum update interval` 的报错时自动进入兼容模式。兼容模式切换识别间隔无需重启采集；其他采集错误仍会提示。
+- **降低本地采集开销**：内置原生采集节流补丁，在 GPU 画面读回、内存映射和 Python 回调之前跳过多余帧，减少无效复制与处理。保留帧仍读取整个窗口，不是纯小地图 GPU 采集；实际收益取决于设备及驱动。
+- **特殊房间图标**：改用原始怪物图标，修复高清悬浮窗中文字标记和角标缩放过小的问题。特殊房间标记不代表该处必定出现 Boss。
+- **新增限时挑战点位**：加入独立游戏图标与显示开关，默认开启。收录 21 张地宫、35 个参考位置，来自 AniimoTools 小队模式资料；多个候选位置不代表同时出现，以当前对局为准。未取得资料的地图不推测点位。
+- **图标同步**：特殊房间和限时挑战沿用网页／悬浮窗实时同步，大小、显示选择及切换地图后的设置保持一致。
+
+### 下载与更新
+
+下载 **AniimoNavigator-Portable-v0.4.zip**，适用于 Windows 10/11 x64，免安装、无需另装 Python。附带 SHA-256 校验文件。
+
+1. 先运行“退出助手.exe”退出旧版本。
+2. 将新 ZIP 完整解压到新文件夹，不要覆盖正在运行的目录。
+3. 双击“启动助手.exe”，重新选择游戏窗口，打开游戏大地图校准。
+4. 快捷键在网页设置。默认鼠标穿透为 Alt+Shift+M，隐藏／显示为 Alt+Shift+H，透明度为 Alt+Shift+↑／↓。
+
+浏览器内已有偏好保留；使用新文件夹时，旧目录中的悬浮窗位置和快捷键文件不会自动迁移。
+
+### 验证与说明
+
+- 已完成路线保留、快捷键、采集兼容、网页与悬浮窗图标同步回归，以及原生窗口采集验证；挑战点位通过底图地形配准，并用两门位置独立核对。
+- 发布包经过独立运行库启动与地图索引检查、ZIP 完整性和素材校验，不含开发测试、测试截图、个人设置、日志或编译工具。
+- 尚未完成不同配置电脑的真实游戏全屏复测，不承诺所有设备的性能提升幅度。
+- 点位资料来源：https://aniimotools.dev/map/lost-sanctum/ 。保留原有地图素材来源及第三方许可说明。
+
+### English
+
+Compared with v0.3.9, v0.4 preserves remaining nest routes while replanning and retries failed requests; adds configurable overlay shortcuts in the web page; removes the overlay footer; handles unsupported capture update intervals automatically; and skips surplus native frames before GPU readback and Python callbacks. It also replaces special-room markers with original monster artwork, fixes high-resolution marker scaling, and adds 35 reference challenge positions across 21 layouts. Challenge data references Team Mode; multiple candidate markers are alternatives, not simultaneous challenges. Marker visibility and size synchronize with the overlay.
+
+Extract the full ZIP into a new folder after closing the old helper. Run **启动助手.exe**, select the game window and reopen the full game map to calibrate. Native capture still reads retained full-window frames; performance and fullscreen compatibility vary by device. Private tests, screenshots, settings, logs and build tools are excluded.
+
+
+---
+
 ## v0.3.9 · 跑图路线、定位恢复与高清悬浮窗
 
 本版相较公开版 **v0.3.8** 汇总了近期本地测试版本的改进，正式版本号统一为 **v0.3.9**。本地 0.3.10～0.3.14 为开发测试编号，并非需要另外安装的前置版本。

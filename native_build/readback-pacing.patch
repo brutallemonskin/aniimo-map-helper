@@ -1,0 +1,152 @@
+--- a/windows-capture-python/src/lib.rs
++++ b/windows-capture-python/src/lib.rs
+@@ -5,7 +5,8 @@
+ 
+ use std::slice;
+ use std::sync::{Arc, Mutex, MutexGuard};
+-use std::time::Duration;
++use std::time::{Duration, Instant};
++use std::sync::atomic::{AtomicU64, Ordering};
+ 
+ use ::windows_capture::capture::{
+     CaptureControl, CaptureControlError, Context, GraphicsCaptureApiError, GraphicsCaptureApiHandler,
+@@ -30,7 +31,15 @@
+     DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT,
+ };
+ 
+-type PythonCaptureCallbacks = (Arc<Py<PyAny>>, Arc<Py<PyAny>>);
++#[derive(Default)]
++struct ReadbackGate {
++    interval_ms: AtomicU64,
++    arrived: AtomicU64,
++    skipped: AtomicU64,
++    mapped: AtomicU64,
++    bytes: AtomicU64,
++}
++type PythonCaptureCallbacks = (Arc<Py<PyAny>>, Arc<Py<PyAny>>, Arc<ReadbackGate>);
+ 
+ /// Fastest Windows Screen Capture Library For Python 🔥.
+ #[pymodule]
+@@ -157,6 +166,7 @@
+     monitor_index: Option<usize>,
+     window_name: Option<String>,
+     window_hwnd: Option<isize>,
++    readback: Arc<ReadbackGate>,
+ }
+ 
+ impl NativeWindowsCapture {
+@@ -166,7 +176,7 @@
+     where
+         T: TryInto<GraphicsCaptureItemType>,
+     {
+-        self.session_options.settings(item, (self.on_frame_arrived_callback.clone(), self.on_closed.clone()))
++        self.session_options.settings(item, (self.on_frame_arrived_callback.clone(), self.on_closed.clone(), self.readback.clone()))
+     }
+ }
+ 
+@@ -245,9 +255,24 @@
+             monitor_index,
+             window_name,
+             window_hwnd,
++            readback: Arc::new(ReadbackGate::default()),
+         })
+     }
+ 
++    /// Gate frames before any staging texture allocation, GPU copy, map, or Python callback.
++    pub fn set_readback_interval(&self, interval_ms: u64) -> PyResult<()> {
++        if interval_ms > 60_000 {
++            return Err(PyException::new_err("Readback interval must be 0..60000 ms"));
++        }
++        self.readback.interval_ms.store(interval_ms, Ordering::Relaxed);
++        Ok(())
++    }
++    /// (arrived, skipped_before_map, mapped, mapped_bytes), for local diagnostics.
++    pub fn readback_stats(&self) -> (u64, u64, u64, u64) {
++        let r = &self.readback;
++        (r.arrived.load(Ordering::Relaxed), r.skipped.load(Ordering::Relaxed),
++         r.mapped.load(Ordering::Relaxed), r.bytes.load(Ordering::Relaxed))
++    }
+     /// Start capture, detaching the GIL while the native capture loop blocks.
+     #[inline]
+     pub fn start(&mut self, py: Python<'_>) -> PyResult<()> {
+@@ -573,6 +598,8 @@
+     on_frame_arrived_callback: Arc<Py<PyAny>>,
+     on_closed: Arc<Py<PyAny>>,
+     context: Option<SharedDeviceContext>,
++    readback: Arc<ReadbackGate>,
++    last_readback: Option<Instant>,
+ }
+ 
+ #[derive(thiserror::Error, Debug)]
+@@ -586,12 +613,12 @@
+ }
+ 
+ impl GraphicsCaptureApiHandler for InnerNativeWindowsCapture {
+-    type Flags = (Arc<Py<PyAny>>, Arc<Py<PyAny>>);
++    type Flags = PythonCaptureCallbacks;
+     type Error = InnerNativeWindowsCaptureError;
+ 
+     #[inline]
+     fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
+-        Ok(Self { on_frame_arrived_callback: ctx.flags.0, on_closed: ctx.flags.1, context: None })
++        Ok(Self { on_frame_arrived_callback: ctx.flags.0, on_closed: ctx.flags.1, context: None, readback: ctx.flags.2, last_readback: None })
+     }
+ 
+     #[inline]
+@@ -600,6 +627,14 @@
+         frame: &mut Frame,
+         capture_control: InternalCaptureControl,
+     ) -> Result<(), Self::Error> {
++        self.readback.arrived.fetch_add(1, Ordering::Relaxed);
++        let now = Instant::now();
++        let interval = Duration::from_millis(self.readback.interval_ms.load(Ordering::Relaxed));
++        if self.last_readback.is_some_and(|last| now.duration_since(last) < interval) {
++            self.readback.skipped.fetch_add(1, Ordering::Relaxed);
++            return Ok(());
++        }
++        self.last_readback = Some(now);
+         let width = frame.width();
+         let height = frame.height();
+         let timestamp = frame.timestamp().map_err(InnerNativeWindowsCaptureError::WindowsApiError)?.Duration;
+@@ -613,6 +648,8 @@
+             frame.desc().Format,
+             frame.color_format(),
+         )?;
++        self.readback.mapped.fetch_add(1, Ordering::Relaxed);
++        self.readback.bytes.fetch_add(mapped_frame.len as u64, Ordering::Relaxed);
+         let buffer_len = mapped_frame.len;
+ 
+         Python::attach(|py| -> Result<(), Self::Error> {
+--- a/windows-capture-python/Cargo.toml
++++ b/windows-capture-python/Cargo.toml
+@@ -21,11 +21,12 @@
+ crate-type = ["cdylib"]
+ 
+ [dependencies]
+-pyo3 = { version = "0.29.0", features = [
++pyo3 = { version = "=0.29.0", features = [
+     "extension-module",
+     "auto-initialize",
+     "abi3",
+     "abi3-py39",
++    "generate-import-lib",
+ ] }
+ thiserror = "2.0.18"
+ windows = "0.62.2"
+--- a/windows-capture-python/windows_capture/__init__.py
++++ b/windows-capture-python/windows_capture/__init__.py
+@@ -231,6 +231,14 @@
+             window_hwnd,
+         )
+ 
++    def set_readback_interval(self, milliseconds: int) -> None:
++        """Skip surplus frames in native code before GPU readback (0 disables gating)."""
++        self.capture.set_readback_interval(milliseconds)
++
++    def readback_stats(self) -> tuple[int, int, int, int]:
++        """Return arrivals, frames skipped before map, mapped frames, and mapped bytes."""
++        return self.capture.readback_stats()
++
+     def start(self) -> None:
+         """Starts The Capture Thread"""
+         if self.frame_handler is None:

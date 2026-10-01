@@ -152,6 +152,20 @@
       "name": "蓝钥匙房",
       "sha256": "d76780edd42034ee94b839747a7391695f196bc59d79ee66ff659e489cff0228",
       "note": "Unmodified map marker artwork as supplied on the source site; not AI-generated."
+    },
+    "unique-rooms": {
+      "name": "特殊房间",
+      "file": "/data/icons/special-room-monster.webp",
+      "source": "https://aniimotools.dev/assets/lost-sanctum/mob.webp",
+      "page": "https://aniimotools.dev/map/lost-sanctum/",
+      "sha256": "55c9e3543a09ee20e6109d98545b841d69191fd52b1b8859262e2e1c833ca96f"
+    },
+    "timed-challenges": {
+      "name": "限时挑战",
+      "file": "/data/icons/timed-challenge.webp",
+      "source": "https://aniimotools.dev/assets/lost-sanctum/marks/challenge.webp",
+      "page": "https://aniimotools.dev/map/lost-sanctum/",
+      "sha256": "3ec9aa716ac9507b42f8d60bf14d2133c5649b26b789be61e025dcad2e19f271"
     }
   },
   "creatures": {

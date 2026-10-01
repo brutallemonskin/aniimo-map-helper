@@ -14,6 +14,8 @@ import urllib.parse
 from functools import lru_cache
 from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from hotkeys import DEFAULTS, HotkeyBindings
 
 WIDTH, HEIGHT = 520, 420
 DISPLAY_SCALE = 2.1
@@ -130,7 +132,7 @@ def paint_player(source,state):
 def layout_height(state):
     if not state.get('image'):return HEIGHT
     source=prepared_layers(state['image'])[0]
-    return BAR+28+max(1,round(WIDTH*source.height/source.width))
+    return BAR+max(1,round(WIDTH*source.height/source.width))
 
 
 def window_size(width, height, screen_width, screen_height):
@@ -144,7 +146,7 @@ def render(state, opacity=190, locked=False, hotkeys=True, width=WIDTH, height=N
     en=state.get('language')=='en'
     scale=width/WIDTH
     height=height or round(layout_height(state)*scale)
-    bar=round(BAR*scale);footer=round(28*scale)
+    bar=round(BAR*scale)
     image=Image.new('RGBA',(width,height),(9,18,25,opacity))
     draw=ImageDraw.Draw(image)
     font=ImageFont.truetype(FONT_PATH,max(1,round(14*scale)))
@@ -160,7 +162,7 @@ def render(state, opacity=190, locked=False, hotkeys=True, width=WIDTH, height=N
     raw=state.get('image')
     if raw:
         # Resize the original map directly to physical pixels, once per size.
-        source=translucent_map(raw,width,max(1,height-bar-footer),opacity).copy()
+        source=translucent_map(raw,width,max(1,height-bar),opacity).copy()
         # Dynamic graphics are rendered at the same physical resolution.
         paint_navigation(source,state)
         paint_player(source,state)
@@ -170,12 +172,6 @@ def render(state, opacity=190, locked=False, hotkeys=True, width=WIDTH, height=N
     else:
         draw.text((90*scale,174*scale),('Open the full game map to begin' if en else '打开游戏大地图，识别后自动显示'),font=font,fill='#d1e1e3')
         draw.text((98*scale,207*scale),('Keep the helper and capture running' if en else '请保持助手页面和画面读取开启'),font=small,fill='#9db1ba')
-    hint='Alt+Shift+M 解锁调整' if locked else '标题栏移动 · 拖动边角缩放'
-    hint+=' · Alt+Shift+H 隐藏' if hotkeys else ' · 快捷键被占用，穿透未开启'
-    if en:
-        hint='Alt+Shift+M: unlock' if locked else 'Drag title: move / edges: resize'
-        hint+=' | Alt+Shift+H: hide' if hotkeys else ' | Hotkeys unavailable'
-    draw.text((10*scale,height-24*scale),hint,font=small,fill='#b1d7cb')
     if not locked:
         for offset in (7,12,17):draw.line(((WIDTH-offset)*scale,height-4*scale,(WIDTH-4)*scale,height-offset*scale),fill='#86e4c4',width=max(1,round(scale)))
     return image
@@ -258,6 +254,22 @@ def main(smoke=False):
     opacity=max(80,min(245,setting('opacity',190)))
     drag = None
     hwnd = None
+    bindings=None;applied_revision=-1;reports=queue.Queue(maxsize=1)
+
+    def apply_hotkeys():
+        nonlocal applied_revision,hotkeys,locked,hidden
+        config=state.get('hotkeys')
+        if not config or config.get('revision')==applied_revision:return
+        outcome=bindings.apply(config['bindings']);applied_revision=config['revision']
+        hotkeys='toggle_lock' in bindings.active
+        if locked and not hotkeys:
+            end_drag();locked=False
+            user.SetWindowLongPtrW(hwnd,-20,user.GetWindowLongPtrW(hwnd,-20)&~0x20)
+        if hidden and 'toggle_hidden' not in bindings.active:hidden=False;user.ShowWindow(hwnd,4)
+        if not smoke:
+            try:reports.get_nowait()
+            except queue.Empty:pass
+            reports.put_nowait(dict(outcome,revision=applied_revision))
 
     def save_settings():
         if smoke or not hwnd:return
@@ -273,7 +285,7 @@ def main(smoke=False):
         nonlocal last_paint
         stamp=(state.get('version'),state.get('map_key'),state.get('title'),state.get('language'),
                bool(state.get('updated') and time.time()-state['updated']>4),
-               opacity,locked,hotkeys,window_width,window_height)
+               opacity,locked,hotkeys,applied_revision,window_width,window_height)
         if stamp==last_paint:return
         im = render(state, opacity, locked, hotkeys, width=window_width, height=window_height)
         # Layered windows require premultiplied BGRA pixels.
@@ -368,6 +380,8 @@ def main(smoke=False):
                 if wp == 2:
                     end_drag()
                     hidden = not hidden; user.ShowWindow(handle, 0 if hidden else 4)
+                if wp in (3,4):
+                    opacity=max(80,min(245,opacity+(20 if wp==3 else -20)));paint();save_settings()
                 return 0
             if msg == 0x113:
                 if smoke: user.DestroyWindow(handle); return 0
@@ -375,6 +389,7 @@ def main(smoke=False):
                 if not drag:
                     try: state = updates.get_nowait()
                     except queue.Empty: pass
+                    apply_hotkeys()
                     next_height=layout_height(state)
                     if next_height != logical_height:
                         logical_height=next_height
@@ -404,9 +419,8 @@ def main(smoke=False):
     # Layered, topmost and non-activating; taskbar entry provides another recovery path.
     hwnd = user.CreateWindowExW(0x80000 | 0x8 | 0x40000 | 0x8000000, name, '伊莫地图悬浮窗', 0x80000000, x, y, window_width, window_height, None, None, instance, None)
     if not hwnd: raise C.WinError(C.get_last_error())
-    hk1 = user.RegisterHotKey(hwnd, 1, 0x4005, ord('M'))  # Alt + Shift, no repeat
-    hk2 = user.RegisterHotKey(hwnd, 2, 0x4005, ord('H'))
-    hotkeys = bool(hk1 and hk2)
+    bindings=HotkeyBindings(lambda ident,mods,key:user.RegisterHotKey(hwnd,ident,mods,key),lambda ident:user.UnregisterHotKey(hwnd,ident))
+    if smoke:state['hotkeys']={'revision':0,'bindings':DEFAULTS};apply_hotkeys()
     paint()
     user.ShowWindow(hwnd, 4)
     user.SetWindowPos(hwnd, W.HWND(-1), 0, 0, 0, 0, 0x13)
@@ -418,7 +432,7 @@ def main(smoke=False):
             toggle_lock(); assert not user.GetWindowLongPtrW(hwnd, -20) & 0x20
 
     def poll():
-        cached={}
+        cached={};pending_report=None
         while not finished.is_set():
             try:
                 query=urllib.parse.urlencode({'image_key':cached.get('map_key','')})
@@ -431,6 +445,15 @@ def main(smoke=False):
             try: updates.get_nowait()
             except queue.Empty: pass
             updates.put_nowait(value)
+            try:pending_report=reports.get_nowait()
+            except queue.Empty:pass
+            if pending_report is not None:
+                try:
+                    request=urllib.request.Request('http://127.0.0.1:'+os.environ.get('ANIIMO_PORT','18731')+'/api/overlay/hotkeys/report',
+                        data=json.dumps(pending_report).encode(),headers={'Content-Type':'application/json'})
+                    with urllib.request.urlopen(request,timeout=2):pass
+                    pending_report=None
+                except Exception:pass
             finished.wait(.25)
 
     if not smoke: threading.Thread(target=poll, daemon=True).start()
@@ -441,7 +464,7 @@ def main(smoke=False):
         if code <= 0: break
         user.TranslateMessage(C.byref(message)); user.DispatchMessageW(C.byref(message))
     end_drag()
-    user.UnregisterHotKey(hwnd, 1); user.UnregisterHotKey(hwnd, 2)
+    bindings.release()
     if smoke: print('PASS: native layered/topmost/non-activating window, paint, click-through style, close')
 
 
