@@ -1,9 +1,9 @@
 const $=id=>document.getElementById(id), cap=$('capture'), cc=cap.getContext('2d'), canvas=$('map'), ctx=canvas.getContext('2d');
 let catalog=[], current=null, bitmap=null, zoom=1, ox=0, oy=0, enabled=new Set(), result=null, mapBounds=null, mapLoadVersion=0;
-let stream=null, frame=null, busy=false, timer=null, running=false, history=[], lastSignature=null, generation=0;
-let tracking=null, trackedAt=0, lastKnown=null;
-let captureKind='full',lastFullFrameAt=-Infinity,lastCaptureSize='';
-let observationSession=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),observationSequence=0;
+let frame=null, busy=false, timer=null, running=false, history=[], lastSignature=null, generation=0;
+let tracking=null, trackedAt=0, lastKnown=null, confirmedMapId=null;
+let lastFullFrameAt=-Infinity;
+let observationSession=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
 const cadence=new NavigatorTools.AdaptiveCadence(),journal=new NavigatorTools.RunJournal(),routeFollower=new NavigatorTools.RouteFollower();
 let recoveryActive=false,navEnabled=false,navTarget=null,selectedPoint=null,navPath=[],navRequest=0,navBusy=false,navAt=0,navOrigin=null,navMessage='',navStops=[],navUnreachable=[];
 let navPending=false,navRetryAt=0,navController=null;
@@ -266,6 +266,17 @@ function syncSeaRegion(){
  const next=seaView==='auto'?(result?.id===current.id&&result.position?regionAt(result.position):null):seaRegions.find(r=>r.id===seaView);
  const changed=next?.id!==activeSeaRegion?.id;activeSeaRegion=next||null;return changed;
 }
+function confirmMap(candidate){
+ if(!candidate?.id||candidate.held)return;
+ // Only confirmed full-map results (or explicit confirmation) reach here.
+ // Browsing a candidate, a covered map, and reopening the same map keep records.
+ if(confirmedMapId&&confirmedMapId!==candidate.id){
+   resetNavigation();resetLoot();history=[];lastSignature=null;
+   tracking=null;lastKnown=null;trackedAt=0;generation++;
+   seaView='auto';$('sea-region').value='auto';
+ }
+ confirmedMapId=candidate.id;
+}
 function rememberPosition(candidate){
  if(candidate?.position){
   const now=Date.now();
@@ -384,7 +395,7 @@ function uniqueMapPoints(points){
  return unique;
 }
 function drawMarker(p,style,ctx,zoom,markerScale=1){if(style.point){ctx.save();if(current&&journal.picked(current.id,p))ctx.globalAlpha=.28;drawOriginalPoint(p,style,ctx,zoom,markerScale);ctx.restore();return;}const {color}=style;const size=style.size*1.4*markerScale;ctx.save();ctx.translate(p.x,p.y);ctx.scale(1/zoom,1/zoom);ctx.shadowColor='#0009';ctx.shadowBlur=3;ctx.fillStyle='#101b25b8';ctx.strokeStyle=color;ctx.lineWidth=1.15;ctx.beginPath();ctx.arc(0,0,size/2,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;const s=(size-5)/24;ctx.scale(s,s);ctx.translate(-12,-12);ctx.lineWidth=1.9;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(iconPaths[style.icon]);ctx.restore();if(style.label){ctx.save();ctx.font=`600 ${11*Math.max(.75,markerScale)/zoom}px sans-serif`;ctx.lineWidth=3/zoom;ctx.strokeStyle='#0b141e';ctx.strokeText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.fillStyle=color;ctx.fillText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.restore();}}
-function newRun(){resetNavigation();captureKind='full';lastFullFrameAt=-Infinity;lastCaptureSize='';resetLoot();seaView='auto';$('sea-region').value='auto';history=[];lastSignature=null;result=null;tracking=null;lastKnown=null;trackedAt=0;generation++;$('position-status').textContent='先开大地图校准，再用小地图追踪';$('result').textContent='新一局 · 等待主门附近地图';$('reason').textContent='从黄门进入后打开地图，探索更多房间以缩小候选。';$('candidates').replaceChildren();draw();}
+function newRun(){confirmedMapId=null;resetNavigation();lastFullFrameAt=-Infinity;resetLoot();seaView='auto';$('sea-region').value='auto';history=[];lastSignature=null;result=null;tracking=null;lastKnown=null;trackedAt=0;generation++;$('position-status').textContent='先开大地图校准，再用小地图追踪';$('result').textContent='新一局 · 等待主门附近地图';$('reason').textContent='从黄门进入后打开地图，探索更多房间以缩小候选。';$('candidates').replaceChildren();draw();}
 function notice(text){$('reason').textContent=text;}
 async function loadMap(id){
  const requestVersion=++mapLoadVersion;if(current?.id!==id){clearRoute();selectedPoint=null;}
@@ -425,65 +436,37 @@ $('newrun').onclick=newRun;$('outdoor-mode').onchange=()=>{newRun();notice('海�
 async function importFile(file){if(!file||!file.type.startsWith('image/'))return;stop();const im=await createImageBitmap(file);frame=im;cap.width=im.width;cap.height=im.height;newRun();$('capture-status').textContent='截图模式';preview();await identify();}
 $('file').onchange=e=>importFile(e.target.files[0]).catch(e=>notice(e.message));document.onpaste=e=>{const f=[...e.clipboardData.items].find(i=>i.type.startsWith('image/'));if(f)importFile(f.getAsFile()).catch(e=>notice(e.message));};
 let captureEpoch=0,firstFrameDeadline=0,receivedCaptureFrame=false;
-const frameClock=new NavigatorTools.FrameClock();
-let captureRate=null,ratePending=false,mediaFrame=null,videoCallback=null,matchController=null,currentCaptureAt=0;
+let matchController=null,currentCaptureAt=0;
 let nativeSession=null,nativePreviewAt=0,nativeSequence=0,nativeRetryAfter=0,nativeCost=null;
 function captureInterval(){return realtimeTracking?effectiveInterval():Math.max(1000,effectiveInterval());}
-function watchVideo(video,epoch){
- if(!video.requestVideoFrameCallback)return;
- videoCallback=video.requestVideoFrameCallback((now,meta)=>{if(epoch!==captureEpoch)return;mediaFrame=meta.presentedFrames;watchVideo(video,epoch);});
-}
-function videoToken(video){
- const q=video.getVideoPlaybackQuality?.();
- if(q&&q.totalVideoFrames>0)return 'decoded:'+q.totalVideoFrames;
- if(mediaFrame!==null)return 'presented:'+mediaFrame;
- return Number.isFinite(video.currentTime)?'time:'+video.currentTime:null;
-}
-async function updateCaptureRate(){
- const track=stream?.getVideoTracks()[0],fps=NavigatorTools.captureFps(captureInterval());
- if(!track?.applyConstraints||captureRate===fps||ratePending)return;
- const epoch=captureEpoch;ratePending=true;
- try{await track.applyConstraints({frameRate:{ideal:fps,max:fps}});if(epoch===captureEpoch)captureRate=fps;}
- catch(e){/* Keep a working share when a driver refuses rate constraints. */}
- finally{ratePending=false;}
-}
-
 function captureMessage(text){$('capture-status').textContent=text;$('empty').textContent=text;$('empty').hidden=false;}
 function stop(){
  captureEpoch++;running=false;clearTimeout(timer);
- matchController?.abort();frameClock.reset();mediaFrame=null;captureRate=null;currentCaptureAt=0;
- if(videoCallback!==null)$('video').cancelVideoFrameCallback?.(videoCallback);videoCallback=null;
+ matchController?.abort();currentCaptureAt=0;
  if(nativeSession){const session=nativeSession;nativeSession=null;fetch('/api/native',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'stop',session}),keepalive:true}).catch(()=>{});}
  $('native-start').disabled=false;
 timer=null;journal.pause();routeFollower.pause();navRequest++;if(lastKnown)holdPosition();
- const previous=stream;stream=null;
- if(previous)previous.getTracks().forEach(t=>{t.onended=null;t.stop();});
- const video=$('video');video.pause?.();video.srcObject=null;frame=null;
- $('stop').disabled=true;$('share').disabled=false;captureMessage('未连接画面');generation++;
+ frame=null;
+ $('stop').disabled=true;captureMessage('未连接画面');generation++;
 }
 $('stop').onclick=()=>{stop();draw();notice('已停止读取游戏画面。');};
-$('share').onclick=async()=>{
- stop();const epoch=captureEpoch;$('share').disabled=true;$('stop').disabled=false;
- captureMessage('请选择要共享的游戏窗口');
+async function connectionFailure(error){
+ const original=(error.name||'Error')+': '+error.message;
  try{
-  if(!navigator.mediaDevices?.getDisplayMedia)throw Error('当前浏览器不支持窗口读取，请用 Chrome 或 Edge 打开本地地址。');
-  const selected=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:NavigatorTools.captureFps(captureInterval()),max:NavigatorTools.captureFps(captureInterval())}},audio:false});
-  if(epoch!==captureEpoch){selected.getTracks().forEach(t=>t.stop());return;}
-  stream=selected;const track=selected.getVideoTracks()[0];
-  if(!track||track.readyState==='ended')throw Error('所选窗口的共享已经结束，请重新选择。');
-  track.onended=()=>{if(epoch!==captureEpoch)return;stop();notice('窗口共享已结束。');};
-  const video=$('video');video.muted=true;video.playsInline=true;video.srcObject=selected;
-  watchVideo(video,epoch);running=true;receivedCaptureFrame=false;firstFrameDeadline=performance.now()+12000;newRun();
-  captureMessage('已授权，正在等待游戏画面');notice('请切回游戏并保持窗口打开；收到画面后会自动开始识别。');
-  // A play promise may remain pending until the source supplies its first
-  // frame. Do not let it block status updates, cancellation or the watchdog.
-  Promise.resolve(video.play()).catch(e=>{if(epoch!==captureEpoch)return;stop();notice('画面播放失败：'+e.message);});
-  tick(epoch);
- }catch(e){if(epoch!==captureEpoch)return;stop();notice(e.name==='NotAllowedError'?'共享已取消或未获授权，请重新选择游戏窗口。':'未开始读取：'+e.message);}
-};
-
+  const response=await fetch('/api/status',{cache:'no-store',signal:AbortSignal.timeout(2500)});
+  if(!response.ok)throw Error('status '+response.status);
+  const status=await response.json();
+  return '采集请求失败，但助手后台仍可连接。'+(status.error?'后台错误：'+status.error+'。':'')+'原始错误：'+original+'。请重新连接采集。';
+ }catch(e){
+  return '无法连接助手后台，自动检查也未得到响应；后台可能退出或连接受阻，具体原因未确认。原始错误：'+original+'。请重新启动助手。';
+ }
+}
 async function nativeRequest(payload){
- const response=await fetch('/api/native',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(15000)});
+ let response;
+ try{response=await fetch('/api/native',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(15000)});}
+ catch(e){
+  throw Error(await connectionFailure(e));
+ }
  const out=await response.json();if(!response.ok)throw Error(out.error||'本地采集不可用');return out;
 }
 async function listNativeWindows(){
@@ -498,42 +481,31 @@ $('native-refresh').onclick=listNativeWindows;
 $('native-cancel').onclick=()=>$('native-dialog').close();
 $('native-connect').onclick=async()=>{
  const windowId=$('native-window').value;if(!windowId)return;
- $('native-dialog').close();stop();const epoch=captureEpoch;$('share').disabled=true;$('native-start').disabled=true;$('stop').disabled=false;captureMessage('正在连接本地采集…');
+ $('native-dialog').close();stop();const epoch=captureEpoch;$('native-start').disabled=true;$('stop').disabled=false;captureMessage('正在连接本地采集…');
  try{const out=await nativeRequest({action:'start',window:windowId,interval:captureInterval()});
   if(epoch!==captureEpoch){nativeRequest({action:'stop',session:out.session}).catch(()=>{});return;}
-  nativeSession=out.session;nativeSequence=0;nativePreviewAt=-Infinity;receivedCaptureFrame=false;firstFrameDeadline=performance.now()+12000;
+  nativeSession=out.session;nativeRetryAfter=0;nativeSequence=0;nativePreviewAt=-Infinity;receivedCaptureFrame=false;firstFrameDeadline=performance.now()+12000;
   running=true;newRun();notice(out.capture_mode==='compatible'?'本地采集已连接（兼容模式），请打开游戏大地图校准。':'本地采集已连接，请打开游戏大地图校准。');tick(epoch);
  }catch(e){if(epoch!==captureEpoch)return;stop();notice(e.message);}
 };
 
-function scanDelay(interval,elapsed){return Math.max(50,elapsed*.5,interval-elapsed);}
 async function tick(epoch=captureEpoch){
- if(!running||epoch!==captureEpoch)return;const started=performance.now();
+ if(!running||!nativeSession||epoch!==captureEpoch)return;
+ let delay=0;
  try{
-  if(nativeSession){nativeCost=null;await identify();if(epoch!==captureEpoch)return;const live=result?.position&&!result.held?result:null;if(nativeCost!==null)cadence.observe(nativeCost,live?.position,live?.id,Date.now());syncQuality();return;}
-  updateCaptureRate();
-  const video=$('video');const track=stream?.getVideoTracks()[0];
-  if(!track||track.readyState==='ended'){stop();notice('窗口共享已结束。');return;}
-  if(video.readyState>=2&&video.videoWidth>0&&video.videoHeight>0&&!track.muted){
-   const health=frameClock.observe(videoToken(video),performance.now(),captureInterval());
-   if(health!=='fresh'){
-    if(health==='stalled'){recoveryActive=false;holdPosition();draw();captureMessage('画面未更新 · 等待恢复');$('reason').textContent='视频帧暂未更新，已保留位置。请确认游戏未最小化；画面恢复后会自动继续，持续无画面时请重新选择窗口。';}
-    return;
-   }
-   currentCaptureAt=Date.now();observationSequence++;frame=video;preview();
-   if(!receivedCaptureFrame){receivedCaptureFrame=true;notice('已收到游戏画面，正在识别。');}
-   $('capture-status').textContent='持续识别中';await identify();
-   const live=result?.position&&!result.held?result:null;cadence.observe(performance.now()-started,live?.position,live?.id,Date.now());syncQuality();
-  }else if(!receivedCaptureFrame&&performance.now()>firstFrameDeadline){
-   stop();notice('已授权，但 12 秒内未收到游戏画面。请保持游戏窗口打开且不要最小化；仍无画面时，可在共享框中尝试“整个屏幕”。');
-  }else{captureMessage(receivedCaptureFrame?'画面暂时暂停，请切回游戏':'已授权，正在等待游戏画面');if(receivedCaptureFrame){recoveryActive=false;navRequest++;holdPosition();draw();}}
- }catch(e){if(epoch===captureEpoch)notice('读取画面失败：'+e.message);}
+  // Yield while an explicit scan or cancelled request finishes; never spin on busy.
+  if(busy){delay=50;return;}
+  nativeCost=null;await identify();if(epoch!==captureEpoch)return;
+  const live=result?.position&&!result.held?result:null;
+  if(nativeCost!==null)cadence.observe(nativeCost,live?.position,live?.id,Date.now());
+  syncQuality();
+ }catch(e){if(epoch===captureEpoch)notice('读取画面失败：'+e.message);delay=1000;}
  finally{
-  if(running&&epoch===captureEpoch){
-   if(nativeSession&&performance.now()>=nativeRetryAfter){
-    // The native endpoint long-polls at the requested interval. No background timer dependency.
-    Promise.resolve().then(()=>tick(epoch));
-   }else timer=setTimeout(()=>tick(epoch),nativeSession?1000:receivedCaptureFrame?scanDelay(captureInterval(),performance.now()-started):200);
+  if(running&&nativeSession&&epoch===captureEpoch){
+   delay=Math.max(delay,nativeRetryAfter-performance.now());
+   // The native endpoint long-polls at the requested interval.
+   if(delay>0)timer=setTimeout(()=>tick(epoch),delay);
+   else Promise.resolve().then(()=>tick(epoch));
   }
  }
 }
@@ -552,41 +524,28 @@ function capturePayload(forceFull=false){
   if(preview)nativePreviewAt=performance.now();
   return {sig:null,payload:{native_session:nativeSession,after:nativeSequence,interval:captureInterval(),force_full:full,preview,loot:realtimeTracking&&$('loot-enabled').checked,tracking,outdoor_mode:$('outdoor-mode').value,realtime_tracking:realtimeTracking,observation:{session:observationSession+'-'+generation,sequence:1,captured_at:Date.now()}}};
  }
- const w=frame.videoWidth||frame.width,h=frame.videoHeight||frame.height,size=w+'x'+h,now=performance.now();
- // A periodic full check also protects against a full-map icon looking like a HUD arrow.
- const diameter=2*Math.round(h*.089);
- const crop=running&&!forceFull&&captureKind==='minimap'&&size===lastCaptureSize&&now-lastFullFrameAt<5000&&w/h>=1.45&&w/h<=2.1&&diameter>=64&&diameter<=1024;
- lastCaptureSize=size;
- const payload={anchor:null,tracking,outdoor_mode:$('outdoor-mode').value,realtime_tracking:realtimeTracking,capture_kind:crop?'minimap':'full'};
- if(running)payload.observation={session:observationSession+'-'+generation,sequence:observationSequence||1,captured_at:currentCaptureAt||Date.now()};
- if(crop){
-   const r=Math.round(h*.089),cx=Math.round(w*.0945),cy=Math.round(h*.132);
-   temp.width=temp.height=2*r;tc.drawImage(frame,cx-r,cy-r,2*r,2*r,0,0,2*r,2*r);
-   // Lossless small crops preserve faint walls and the player's egg marker.
-   payload.image=temp.toDataURL('image/png');
-   if(realtimeTracking&&$('loot-enabled').checked)payload.scene=cap.toDataURL('image/jpeg',.9);
- }else{
-   lastFullFrameAt=now;temp.width=w;temp.height=h;tc.drawImage(frame,0,0,w,h);
-   payload.image=temp.toDataURL('image/jpeg',.9);
- }
- return {payload,sig:crop?null:signature()};
+ // Imported screenshots use a single full-frame request; live cropping is native.
+ const w=frame.width,h=frame.height;
+ temp.width=w;temp.height=h;tc.drawImage(frame,0,0,w,h);
+ return {payload:{anchor:null,tracking,outdoor_mode:$('outdoor-mode').value,realtime_tracking:realtimeTracking,capture_kind:'full',image:temp.toDataURL('image/jpeg',.9)},sig:signature()};
 }
+
 async function requestMatch(payload){
  const controller=new AbortController();matchController=controller;
  const timeout=setTimeout(()=>controller.abort(),15000);
  try{
  const response=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:controller.signal});
  const out=await response.json();if(!response.ok){const error=Error(out.error||'识别失败');error.status=response.status;throw error;}return out;
- }catch(e){if(e.name==='AbortError')throw Error('识别等待超时或已停止，下一次读取会自动重试');throw e;}
+ }catch(e){if(e.name==='AbortError')throw Error('识别等待超时或已停止，下一次读取会自动重试');if(e instanceof TypeError)throw Error(await connectionFailure(e));throw e;}
  finally{clearTimeout(timeout);if(matchController===controller)matchController=null;}
 }
 async function identify(forceFull=false){
- if((!frame&&!nativeSession)||busy)return;busy=true;const g=generation;
+ if((!frame&&!nativeSession)||busy)return;busy=true;let g=generation;
  try{
  let {payload,sig}=capturePayload(forceFull),out=await requestMatch(payload);if(g!==generation)return;
  if(out.capture_wait){
   recoveryActive=false;holdPosition();draw();captureMessage(out.reason);
-  if(!receivedCaptureFrame&&performance.now()>firstFrameDeadline)$('reason').textContent='本地采集暂未收到新画面，请保持游戏窗口打开；持续无画面可改用浏览器分享。';
+  if(!receivedCaptureFrame&&performance.now()>firstFrameDeadline)$('reason').textContent='本地采集暂未收到新画面，请保持游戏窗口打开且不要最小化；持续无画面请停止后重新连接。';
   return;
  }
  if(out.native_capture){
@@ -597,7 +556,7 @@ async function identify(forceFull=false){
  if(out.requires_full_frame){
    ({payload,sig}=capturePayload(true));out=await requestMatch(payload);if(g!==generation)return;
  }
- captureKind=out.method==='minimap'?'minimap':'full';recoveryActive=!!out.recovering;updateLoot(out);
+ recoveryActive=!!out.recovering;updateLoot(out);
  if(out.method==='minimap'){
    if(out.status==='paused'){showTrackingPaused();draw();return;}
    result=out.status==='matched'?out.candidates[0]:null;
@@ -609,6 +568,7 @@ async function identify(forceFull=false){
  }
  $('position-status').textContent='正在确认地图与位置';
  if(out.status==='loading'){if(!holdPosition())notice('地图索引仍在准备，稍后再识别。');draw();return;}
+ if(out.status==='matched'){confirmMap(out.candidates?.[0]);g=generation;}
  const tallies=evidence(out,sig);result=out.status==='matched'?out.candidates[0]:null;
  const ranked=[...(out.candidates||[])].sort((a,b)=>(tallies.get(b.id)?.value||0)-(tallies.get(a.id)?.value||0));
  const leader=ranked[0],lt=leader&&tallies.get(leader.id),runner=ranked[1]&&tallies.get(ranked[1].id);
@@ -619,11 +579,11 @@ async function identify(forceFull=false){
  // Repeating the same still image does not count as new evidence.
  const accumulated=!result&&clearLead&&eligible&&lt?.frames>=2&&lt.value>(runner?.value||0)*1.5;
  if(accumulated)result=leader;
- if(result)rememberPosition(result);
+ if(result){confirmMap(result);g=generation;rememberPosition(result);}
  $('position-status').textContent=result?.position?(out.position_source==='manual'?'手动位置 · 点重置恢复自动追踪':'已定位角色 · 可关闭大地图继续追踪'):out.position_source==='auto'?'已看到箭头，但尚未确认地图位置':'当前画面无法定位角色';
  $('result').textContent=result?(accumulated?'探索推测 · ':'当前匹配 · ')+result.name:out.status==='uncertain'?'仍有多个候选':'当前画面无法确认';
  $('reason').textContent=(accumulated?'连续探索更支持这张地图，仍请核对主门和岔路。':out.reason)+` 已记录 ${history.length} 个有变化的探索画面。`;
- $('candidates').replaceChildren();let moreCandidates=null;for(const [index,c] of ranked.entries()){const t=tallies.get(c.id);const b=document.createElement('button');const detail=c.method==='doors'?`两门＋地形 ${Math.round(c.score)}分`:`${c.inliers} 个吻合特征`;const rank=document.createElement('span');rank.className='candidate-rank';rank.textContent=String(index+1).padStart(2,'0');const content=document.createElement('span'),title=document.createElement('span'),meta=document.createElement('span');title.className='candidate-title';title.textContent=c.name;meta.className='candidate-meta';meta.textContent=`${detail} · 历史首选 ${t?.frames||0} 次`;content.append(title,meta);b.append(rank,content);b.title='地形分是相对匹配指标，不代表正确概率。';b.onclick=async()=>{try{generation++;await loadMap(c.id);result=c;rememberPosition(c);$('result').textContent='已手动确认 · '+c.name;$('position-status').textContent=c.position?'已定位角色 · 可关闭大地图继续追踪':'已确认地图，请在大地图上标记角色位置';draw();}catch(e){notice(e.message);}};if(index===0){$('candidates').append(b);}else{if(!moreCandidates){moreCandidates=document.createElement('details');moreCandidates.className='more-candidates';const summary=document.createElement('summary');summary.textContent='其余 '+(ranked.length-1)+' 个候选';moreCandidates.append(summary);$('candidates').append(moreCandidates);}moreCandidates.append(b);}}
+ $('candidates').replaceChildren();let moreCandidates=null;for(const [index,c] of ranked.entries()){const t=tallies.get(c.id);const b=document.createElement('button');const detail=c.method==='doors'?`两门＋地形 ${Math.round(c.score)}分`:`${c.inliers} 个吻合特征`;const rank=document.createElement('span');rank.className='candidate-rank';rank.textContent=String(index+1).padStart(2,'0');const content=document.createElement('span'),title=document.createElement('span'),meta=document.createElement('span');title.className='candidate-title';title.textContent=c.name;meta.className='candidate-meta';meta.textContent=`${detail} · 历史首选 ${t?.frames||0} 次`;content.append(title,meta);b.append(rank,content);b.title='地形分是相对匹配指标，不代表正确概率。';b.onclick=async()=>{try{generation++;await loadMap(c.id);result=c;confirmMap(c);rememberPosition(c);$('result').textContent='已手动确认 · '+c.name;$('position-status').textContent=c.position?'已定位角色 · 可关闭大地图继续追踪':'已确认地图，请在大地图上标记角色位置';draw();}catch(e){notice(e.message);}};if(index===0){$('candidates').append(b);}else{if(!moreCandidates){moreCandidates=document.createElement('details');moreCandidates.className='more-candidates';const summary=document.createElement('summary');summary.textContent='其余 '+(ranked.length-1)+' 个候选';moreCandidates.append(summary);$('candidates').append(moreCandidates);}moreCandidates.append(b);}}
  if(!result)holdPosition();
  const displayed=result||leader;
  if(displayed&&current?.id!==displayed.id)await loadMap(displayed.id);
@@ -642,7 +602,7 @@ $('zoom-in').onclick=()=>zoomBy(1.3);$('zoom-out').onclick=()=>zoomBy(1/1.3);
 document.querySelector('.upload').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('file').click();}};
 async function status(){try{const s=await fetch('/api/status').then(r=>r.json());$('engine').title=s.error||'';if(s.error)notice('识别引擎异常：'+s.error);$('engine').textContent=s.error?'识别引擎异常':s.ready?`${s.indexed} 张地图 · 本地识别就绪${s.version?" · v"+s.version:""}`:`正在索引 ${s.indexed} 张地图…`;if(!s.ready&&!s.error)setTimeout(status,1500);}catch(e){$('engine').textContent='本地服务未连接';}}
 async function init(){await loadPointImages();await loadMap('sanctum-31');status();overlayStatus();}init().catch(e=>notice('地图加载失败：'+e.message));
-const buttonIcons={newrun:'reset',focus:'focus',share:'monitor',stop:'stop',once:'scan',fit:'focus','zoom-in':'plus','zoom-out':'minus'};
+const buttonIcons={newrun:'reset',focus:'focus','native-start':'monitor',stop:'stop',once:'scan',fit:'focus','zoom-in':'plus','zoom-out':'minus'};
 function decorateButtons(){for(const [id,name]of Object.entries(buttonIcons)){const el=$(id);if(!el||el.querySelector('.ui-icon'))continue;if(id==='source')el.textContent=el.textContent.replace(' ↗','');if(id==='zoom-in'||id==='zoom-out')el.replaceChildren();el.prepend(icon(name));}const label=document.querySelector('.upload');if(!label.querySelector('.ui-icon'))label.prepend(icon('upload'));}
 decorateButtons();for(const id of Object.keys(buttonIcons))new MutationObserver(decorateButtons).observe($(id),{childList:true});document.querySelector('.brand>b').replaceChildren(icon('compass'));document.querySelector('#empty>span').replaceChildren(icon('monitor'));
 
@@ -658,4 +618,4 @@ window.addEventListener('languagechange',()=>{draw();publishOverlay(true);});
 
 // Restore only supported intervals; storage may be unavailable in private mode.
 try { const saved=localStorage.getItem('aniimo-scan-interval'); if(['auto','250','500','1000','2000','3000'].includes(saved)) $('interval').value=saved; } catch(e) {}
-$('interval').onchange=()=>{syncQuality();updateCaptureRate();try {localStorage.setItem('aniimo-scan-interval',$('interval').value);} catch(e) {}};
+$('interval').onchange=()=>{syncQuality();try {localStorage.setItem('aniimo-scan-interval',$('interval').value);} catch(e) {}};

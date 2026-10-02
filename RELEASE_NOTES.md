@@ -1,3 +1,40 @@
+## v0.4.1 · 本地采集隔离、错误诊断与悬浮窗交互
+
+相比正式版 v0.4：
+
+- **统一本地采集**：移除浏览器屏幕分享入口，保留截图导入。点击“本地采集”，手动选择伊莫窗口连接；画面仅在本机处理。
+- **改善悬浮窗拖动和缩放**：补充拖动期间的鼠标位置与松键检查，减少丢失鼠标移动事件导致的卡住；仍需在关闭鼠标穿透后操作。
+- **切换地宫清理旧记录**：确认识别到不同地图，或手动确认另一张地图后，清空旧轨迹、拾取记录、彩虹掉落标记及规划路线。候选预览、暂时遮挡和同图校准不会清空；同一布局的新一局仍需点“新一局”。
+- **隔离采集故障**：本地采集运行在独立进程，采集库异常退出不会直接带走网页服务；启动或读取超时会终止该采集进程，允许重新连接。
+- **直接显示错误原因**：显示采集库返回的错误；异常退出时显示阶段和退出码。网络请求失败后自动检查后台状态。阶段日志及时写入，便于反馈问题，不记录游戏截图。
+- **按接口支持情况回退**：Win10 / Win11 均先尝试正常参数；只有明确提示不支持时才分别停用最小更新间隔或使用默认光标设置，保留原生读回前跳帧。
+- **统一下载包命名**：ZIP 和内部文件夹均为 `aniimo_map_helper_v0.4.1`。
+
+### 下载与更新
+
+下载 **aniimo_map_helper_v0.4.1.zip**，适用于 Windows 10/11 x64，免安装、无需另装 Python。附带 SHA-256 校验文件。
+
+1. 使用“退出助手.exe”退出旧版。
+2. 完整解压到新文件夹，不要覆盖正在运行的目录。
+3. 双击“启动助手.exe”，点击“本地采集”选择游戏窗口，再打开游戏大地图校准。
+
+浏览器已有偏好保留；新目录不会自动迁移旧目录的悬浮窗位置及快捷键文件。
+
+### 验证与已知限制
+
+- 已验证参数回退、独立进程异常退出与超时、网页连接恢复、地图切换记录清理和悬浮窗拖动回归；使用自建样例窗口验证真实 WGC 采集、大地图校准转小地图追踪及间隔切换。
+- **部分 Win10 设备的 `0xC0000409` 采集启动崩溃仍未解决。** 进程隔离和详细报错便于恢复及诊断，不代表已修复崩溃根因。DXGI 采集未包含在此版。
+- 采集进程间使用本机共享内存，并在识别前复制稳定图像，会增加内存及复制开销；不承诺所有设备都更快。尚需不同设备的真实游戏复测。
+- 发布包排除开发测试、测试截图、个人设置、日志与编译工具，保留素材来源及第三方许可。
+
+### English
+
+v0.4.1 uses native window capture exclusively while retaining screenshot import. It improves overlay drag/resize recovery, clears expedition records on confirmed changes to a different map, isolates capture into a worker process, and shows original errors or crash stages and exit codes. Connection failures trigger an automatic service health check. Unsupported update-interval or cursor settings fall back individually, without a blanket Windows 10 profile; native pre-readback pacing remains enabled.
+
+Download **aniimo_map_helper_v0.4.1.zip**, exit the old helper, extract into a new folder, run **启动助手.exe**, select the game window with Local capture, and open the full game map to calibrate. Use New run when a new match has the same layout. The `0xC0000409` startup crash on some Windows 10 devices remains unresolved; DXGI capture is not included. Process isolation adds memory/copy overhead. Private tests, screenshots, settings, logs and build tools are excluded.
+
+---
+
 ## v0.4 · 采集性能优化、自定义快捷键与挑战点位
 
 相比正式版 v0.3.9，本版包含以下更新：

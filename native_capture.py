@@ -14,6 +14,12 @@ def unsupported_update_interval(error):
     return (any(name in message for name in ('minimum update interval','minimum_update_interval','minupdateinterval'))
             and any(reason in message for reason in ('not supported','unsupported')))
 
+
+def unsupported_cursor_capture(error):
+    message=str(error).casefold()
+    return ('cursor capture' in message
+            and any(reason in message for reason in ('not supported','unsupported')))
+
 def window_api():
     api=C.WinDLL('user32',use_last_error=True)
     # HTTP handler threads otherwise see DPI-virtualized client coordinates.
@@ -64,13 +70,15 @@ def client_image(image,hwnd):
     return image
 
 class NativeCapture:
-    def __init__(self):
+    def __init__(self, report=None):
+        self.report=report or (lambda stage:None)
         self.lock=threading.Lock();self.operations=threading.RLock()
         self.control=None;self.capture=None;self.session=None;self.epoch=0
         self.latest=None;self.sequence=0;self.interval=500;self.hwnd=None
         self.last_poll=0;self.closed=False;self.started=0;self.changed=0
         self.next_scan=0;self.scan_condition=threading.Condition()
         self.minimum_interval_supported=None
+        self.cursor_settings_supported=None
         self.readback_pacing=False
 
     def stop(self,session=None):
@@ -86,6 +94,7 @@ class NativeCapture:
             return {'stopped':True}
 
     def _start_stream(self,interval):
+        self.report('加载原生采集库')
         from windows_capture import WindowsCapture
         self.epoch+=1;old=self.control;self.control=None
         if old:old.stop()
@@ -94,12 +103,15 @@ class NativeCapture:
         def launch(limited):
             # Separate generations also invalidate callbacks from a failed attempt.
             self.epoch+=1;epoch=self.epoch;self.closed=False;last_retained=None
-            options={'cursor_capture':False,'window_hwnd':self.hwnd}
+            options={'cursor_capture':None if self.cursor_settings_supported is False else False,'window_hwnd':self.hwnd}
             if limited:options['minimum_update_interval']=max(125,int(interval/2))
+            self.report('创建采集对象')
             capture=WindowsCapture(**options)
             pace=getattr(capture,'set_readback_interval',None)
             native_pacing=callable(pace)
-            if native_pacing:pace(max(125,int(interval/2)))
+            if native_pacing:
+                self.report('设置原生跳帧间隔')
+                pace(max(125,int(interval/2)))
             self.readback_pacing=native_pacing
             @capture.event
             def on_frame_arrived(frame,control):
@@ -117,20 +129,33 @@ class NativeCapture:
             @capture.event
             def on_closed():
                 if epoch==self.epoch:self.closed=True
-            self.capture=capture;self.control=capture.start_free_threaded()
-        limited=self.minimum_interval_supported is not False
-        try:launch(limited)
-        except Exception as error:
-            self.epoch+=1;self.capture=None
-            with self.lock:self.latest=None
-            if not limited or not unsupported_update_interval(error):raise
-            self.minimum_interval_supported=False
-            launch(False)
-        else:
-            if limited:self.minimum_interval_supported=True
+            self.capture=capture
+            self.report('启动 Windows 捕获线程')
+            self.control=capture.start_free_threaded()
+            self.report('采集线程已连接')
+        # Capability errors disable only the unsupported option, independent of OS name.
+        # At most three attempts: each optional feature can be disabled only once.
+        for _ in range(3):
+            limited=self.minimum_interval_supported is not False
+            try:launch(limited)
+            except Exception as error:
+                self.epoch+=1;self.capture=None
+                with self.lock:self.latest=None
+                if limited and unsupported_update_interval(error):
+                    self.minimum_interval_supported=False
+                    self.report('系统不支持最小更新间隔，改用原生跳帧')
+                elif self.cursor_settings_supported is not False and unsupported_cursor_capture(error):
+                    self.cursor_settings_supported=False
+                    self.report('系统不支持光标设置，使用系统默认值')
+                else:raise
+            else:
+                if limited:self.minimum_interval_supported=True
+                if self.cursor_settings_supported is not False:self.cursor_settings_supported=True
+                break
 
     def start(self,hwnd,interval):
         with self.operations:
+            self.report('检查目标窗口')
             selected=next((w for w in windows() if w['id']==str(hwnd)),None)
             if selected is None:raise ValueError('窗口已关闭或不可见，请重新选择。')
             self.stop();self.hwnd=int(hwnd);self.sequence=0
@@ -147,7 +172,7 @@ class NativeCapture:
                         if session==self.session and time.monotonic()-self.last_poll>20:self.stop(session)
             threading.Thread(target=expire,daemon=True).start()
             return {'session':self.session,'title':selected['title'],
-                    'capture_mode':'compatible' if self.minimum_interval_supported is False else 'system_interval',
+                    'capture_mode':'compatible' if self.minimum_interval_supported is False or self.cursor_settings_supported is False else 'system_interval',
                     'readback_pacing':self.readback_pacing}
 
     def wait_next(self,session,interval):

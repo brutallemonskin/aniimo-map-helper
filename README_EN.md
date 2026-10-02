@@ -1,4 +1,4 @@
-**[Download v0.4](https://github.com/brutallemonskin/aniimo-map-helper/releases/tag/v0.4).** Adds configurable overlay shortcuts and challenge markers, preserves remaining routes during replanning, and improves native capture compatibility and readback pacing.
+**[Download v0.4.1](https://github.com/brutallemonskin/aniimo-map-helper/releases/tag/v0.4.1).** Uses native capture exclusively, isolates capture failures, adds detailed diagnostics, improves overlay dragging/resizing and clears expedition records on confirmed map changes. The `0xC0000409` capture startup crash reported on some Windows 10 devices remains unresolved.
 
 # Aniimo Map Navigator
 
@@ -9,11 +9,11 @@ A local map companion for Aniimo's Egg Heist mode on Windows 10/11 x64.
 1. Extract the complete portable ZIP into a writable folder.
 2. Double-click **启动助手.exe** (Start helper). No Python installation is required.
 3. Open the helper in Chrome or Edge. Choose **English** in the top-right language menu.
-4. Click **Select game window** to share the game, or use **Local capture (trial)** to select and connect to the game window.
+4. Click **Local capture**, select the Aniimo window and connect. This is the only live capture method; screenshot import remains available.
 5. Enter a dungeon and open the full game map to identify the map and calibrate your position.
 6. Close the game map to continue tracking from the minimap. Keep the helper and screen sharing running.
 7. Use **Game overlay** to display the translucent map over the game.
-8. Use **New run** when starting another run. Double-click **退出助手.exe** (Exit helper) when finished. It closes helper services and overlays across folders and versions in your current desktop session, including native capture; unrelated Python programs are preserved. Close the helper browser tabs or stop browser sharing separately.
+8. Confirmed map changes automatically clear old trails, collected markers, loot and routes. Use **New run** if the next run uses the same layout. Double-click **退出助手.exe** (Exit helper) when finished. It closes helper services and overlays across folders and versions in your current desktop session, including native capture; unrelated Python programs are preserved. Close the helper browser tabs or stop browser sharing separately.
 
 The language menu switches instantly without resetting the current map or player position. Your selection is saved in this browser; first use defaults to Chinese.
 
@@ -68,7 +68,7 @@ The browser preview is limited to an 800px longest edge. When rainbow-loot detec
 
 Game capture includes a saved Live tracking switch, enabled by default. Turning it off retains the last position and skips minimap matching and rainbow-loot detection. Full-map checks continue at no more than once per second (a selected 2s/3s interval remains in effect). Reopen the full map to calibrate after enabling again.
 
-Matching currently uses CPU OpenCV/NumPy without GPU matching acceleration. Memory stores the map index and caches. Turning tracking off reduces ongoing processing but does not unload the index or stop the browser capture stream. Use Stop to end capture entirely. Default point size is 85%, with an additional 125% option.
+Matching currently uses CPU OpenCV/NumPy without GPU matching acceleration. Memory stores the map index and caches. Turning tracking off reduces ongoing processing but does not unload the index or stop local capture. Use Stop to end capture entirely. Default point size is 85%, with an additional 125% option.
 
 ## Overlay fit
 
@@ -101,10 +101,12 @@ Validated with existing screenshots, movement replay, simulated slow processing 
 Overlay mouse capture is released after interrupted dragging/resizing, missed mouse-up, hiding and closing. Simulated input regression passes; the reported Alt+Tab / Windows-key symptom still needs validation on affected hardware. Route progression and debounced deviation replanning are included. Nest collection remains manual; upper-floor support is deferred.
 
 ## Capture reliability and native capture (v0.3.9)
-When the optional minimum update interval is unsupported, capture automatically retries in compatibility mode. Recognition remains paced, and interval changes do not restart that stream. The portable package includes a native patch that skips surplus frames before GPU readback, memory mapping and Python callbacks. It cannot limit Windows frame delivery; accepted frames still read the whole window, and actual savings depend on the device and driver. Other capture failures are still reported. An unmodified capture library retains software pacing but does not provide the pre-readback optimization. Patch source and build instructions are in `native_build/`.
-Browser capture requests follow the recognition interval (8/4/2/1/1 fps). New video frame counters distinguish a stalled stream from a stationary character; 15-second match timeouts retry without queuing inference jobs. Moving recovery requires terrain agreement and, for larger steps, independent inter-frame motion evidence.
-Choose **Local capture (trial)** and explicitly select the game window to use Windows Graphics Capture. Raw images go directly to the local matcher; the page receives results and a small preview at most once per second. The binding still maps the full window, so this is not GPU-only region capture and no performance gain is guaranteed. If the OS or driver does not support the requested native settings, use browser sharing. Native polling is paced by the server rather than background browser timers. Keep the page running; closing, freezing or discarding the tab releases capture after about 20 seconds.
+When the optional minimum update interval is unsupported, capture automatically retries in compatibility mode. Recognition remains paced, and interval changes do not restart that stream. The portable package includes a native patch that skips surplus frames before GPU readback, memory mapping and Python callbacks. It cannot limit Windows frame delivery; accepted frames still read the whole window, and actual savings depend on the device and driver. Windows 10 and 11 both try normal settings first. Only explicit unsupported-option errors disable the affected interval or cursor option; other failures remain visible. The 0xC0000409 startup crash reported on some Windows 10 devices remains unresolved. An unmodified capture library retains software pacing but does not provide the pre-readback optimization. Patch source and build instructions are in `native_build/`.
+Local capture follows the selected recognition interval. Native frame sequences distinguish stale frames from new observations; 15-second match timeouts retry without queuing inference jobs. Moving recovery requires terrain agreement and, for larger steps, independent inter-frame motion evidence.
+Choose **Local capture** and explicitly select the game window to use Windows Graphics Capture. Raw images go directly to the local matcher; the page receives results and a small preview at most once per second. The binding still maps the full window, so this is not GPU-only region capture and no performance gain is guaranteed. Unsupported minimum update intervals automatically use compatibility mode. For other errors, stop and reconnect. Native polling is paced by the server rather than background browser timers. Keep the page running; closing, freezing or discarding the tab releases capture after about 20 seconds.
 Validated with an owned Windows window replaying game screenshots, including full-map to minimap transitions and DPI cropping. Live game fullscreen, different GPUs and low-end machines still need field testing.
 
 ## High-resolution overlay
 Preserves the original map pixels up to a 2048px longest edge and renders directly at the physical window size. Marker display scale and filter synchronization are preserved. Cached map resizing and unchanged-frame skipping reduce repeated work; player movement still uses coordinate-only updates. Capture and recognition rates do not increase. Higher-resolution caches use some additional memory. Original asset detail remains the limit.
+
+Native capture now runs in an isolated process. Library errors are shown directly; unexpected worker exits report the stage and exit code without terminating the HTTP service. Exit codes alone do not establish the root cause. Requests time out after 10 seconds. Frames use local shared memory plus a stable copy for recognition, adding memory/copy overhead. Network failures trigger an automatic service health check.

@@ -313,7 +313,20 @@ def main(smoke=False):
         was_dragging=drag is not None
         drag=None  # ReleaseCapture can synchronously send WM_CAPTURECHANGED.
         if release and user.GetCapture()==hwnd:user.ReleaseCapture()
-        if was_dragging:save_settings()
+        if was_dragging:
+            user.SetTimer(hwnd,1,250,None)
+            save_settings()
+
+    def begin_drag(kind,point,rect):
+        nonlocal drag
+        drag=(kind,point.x,point.y,(rect.left,rect.top,window_width,window_height))
+        user.SetCapture(hwnd)
+        if user.GetCapture()!=hwnd:
+            end_drag(release=False)
+            return
+        # Background/non-activating windows can miss move messages outside their
+        # visible area. Poll only during an explicit mouse drag, never at idle.
+        user.SetTimer(hwnd,1,33,None)
 
     def check_drag():
         # A background non-activating overlay can miss mouse-up outside its bounds.
@@ -321,6 +334,22 @@ def main(smoke=False):
         if drag is not None:
             button=0x02 if user.GetSystemMetrics(23) else 0x01
             if user.GetCapture()!=hwnd or not (user.GetAsyncKeyState(button)&0x8000):end_drag()
+
+    def move_drag():
+        nonlocal window_width,window_height
+        if drag is None:return
+        p,r=W.POINT(),W.RECT()
+        if not user.GetCursorPos(C.byref(p)) or not user.GetWindowRect(hwnd,C.byref(r)):return
+        edges,sx,sy,rect=drag
+        if edges=='move':
+            x,y=rect[0]+p.x-sx,rect[1]+p.y-sy
+            if (x,y)!=(r.left,r.top):user.SetWindowPos(hwnd,W.HWND(-1),x,y,0,0,0x11)
+        else:
+            x,y,width,height=resize_rect(rect,(p.x-sx,p.y-sy),edges,maximum_width,logical_height/WIDTH)
+            if (x,y,width,height)==(r.left,r.top,window_width,window_height):return
+            window_width,window_height=width,height
+            user.SetWindowPos(hwnd,W.HWND(-1),x,y,width,height,0x10)
+            paint()
 
     def toggle_lock():
         nonlocal locked
@@ -343,7 +372,7 @@ def main(smoke=False):
                 p,r=W.POINT(),W.RECT()
                 user.GetCursorPos(C.byref(p));user.GetWindowRect(handle,C.byref(r))
                 if edges:
-                    drag=(edges,p.x,p.y,(r.left,r.top,window_width,window_height));user.SetCapture(handle);return 0
+                    begin_drag(edges,p,r);return 0
                 x,y=px*WIDTH/window_width,py*logical_height/window_height
                 if y < BAR:
                     if x > WIDTH-42: user.DestroyWindow(handle)
@@ -353,19 +382,12 @@ def main(smoke=False):
                     else:
                         p, r = W.POINT(), W.RECT()
                         user.GetCursorPos(C.byref(p)); user.GetWindowRect(handle, C.byref(r))
-                        drag = ('move',p.x,p.y,(r.left,r.top,window_width,window_height)); user.SetCapture(handle)
+                        begin_drag('move',p,r)
                 return 0
             if msg == 0x200 and drag:
                 if not (wp&1):end_drag();return 0
                 check_drag()
-                if drag is None:return 0
-                p = W.POINT(); user.GetCursorPos(C.byref(p))
-                edges,sx,sy,rect=drag
-                if edges=='move':
-                    user.SetWindowPos(handle,W.HWND(-1),rect[0]+p.x-sx,rect[1]+p.y-sy,0,0,0x11)
-                else:
-                    x,y,window_width,window_height=resize_rect(rect,(p.x-sx,p.y-sy),edges,maximum_width,logical_height/WIDTH)
-                    user.SetWindowPos(handle,W.HWND(-1),x,y,window_width,window_height,0x10);paint()
+                move_drag()
                 return 0
             if msg == 0x20 and not locked:
                 p,r=W.POINT(),W.RECT();user.GetCursorPos(C.byref(p));user.GetWindowRect(handle,C.byref(r))
@@ -386,6 +408,7 @@ def main(smoke=False):
             if msg == 0x113:
                 if smoke: user.DestroyWindow(handle); return 0
                 check_drag()
+                move_drag()
                 if not drag:
                     try: state = updates.get_nowait()
                     except queue.Empty: pass

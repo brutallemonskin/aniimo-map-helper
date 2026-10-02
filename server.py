@@ -2,19 +2,37 @@ import base64, json, threading, urllib.parse, webbrowser, sys, os, time
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 import cv2, numpy as np
+import logging, logging.handlers, faulthandler
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from matcher import Matcher
 from overlay_bridge import OverlayBridge
 from route_planner import RoutePlanner
-from native_capture import NativeCapture, windows, small_preview
+from native_capture import windows, small_preview
+from capture_process import IsolatedCapture
 
 ROOT=Path(__file__).resolve().parent
 PORT=int(os.environ.get('ANIIMO_PORT','18731'))
 matcher=Matcher()
 overlay=OverlayBridge(ROOT)
 route_planner=RoutePlanner(ROOT)
-native=NativeCapture()
+native=IsolatedCapture(ROOT)
 match_slot=threading.Lock()
+capture_log=logging.getLogger('aniimo.capture')
+capture_log.addHandler(logging.NullHandler())
+
+def enable_capture_diagnostics():
+    # Local diagnostics only: no screenshots, window titles or session tokens.
+    try:
+        handler=logging.handlers.RotatingFileHandler(ROOT/'capture-error.log',maxBytes=262144,backupCount=1,encoding='utf-8')
+        handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+        capture_log.addHandler(handler);capture_log.setLevel(logging.INFO)
+        crash=ROOT/'capture-crash.log'
+        if crash.exists() and crash.stat().st_size>262144:crash.replace(ROOT/'capture-crash.previous.log')
+        output=crash.open('a',encoding='utf-8')
+        faulthandler.enable(file=output,all_threads=True)
+        return output  # Keep the descriptor alive for the entire service lifetime.
+    except OSError:
+        return None
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self,*a,**kw): super().__init__(*a,directory=str(ROOT),**kw)
@@ -24,7 +42,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
     def do_GET(self):
         path=urllib.parse.urlparse(self.path).path
-        if path=='/api/status': return self.json({'ready':matcher.ready,'indexed':len(matcher.maps),'error':matcher.error,'version':'0.4'})
+        if path=='/api/status': return self.json({'ready':matcher.ready,'indexed':len(matcher.maps),'error':matcher.error,'version':'0.4.1'})
         if path=='/api/overlay': return self.json(overlay.status())
         if path=='/api/overlay/hotkeys': return self.json(overlay.status()['hotkeys'])
         if path=='/api/overlay/frame':
@@ -57,7 +75,9 @@ class Handler(SimpleHTTPRequestHandler):
                     if type(interval) is not int or interval not in (250,500,1000,2000,3000):raise ValueError('无效间隔')
                     return self.json(native.start(d.get('window'),interval))
                 raise ValueError('无效采集操作')
-            except Exception as e:return self.json({'error':'本地采集不可用：'+str(e)+'；可改用浏览器分享。'},400)
+            except Exception as e:
+                capture_log.exception('Native capture request failed')
+                return self.json({'error':str(e)},400)
         if self.path in ('/api/overlay/hotkeys','/api/overlay/hotkeys/report'):
             try:
                 n=int(self.headers.get('Content-Length','0'))
@@ -85,10 +105,12 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as e:return self.json({'error':str(e)},400)
         if self.path!='/api/match': return self.send_error(404)
         inference_locked=False
+        native_request=False
         try:
             n=int(self.headers.get('Content-Length','0'))
             if not 0<n<12_000_000: return self.json({'error':'图片过大'},413)
             d=json.loads(self.rfile.read(n))
+            native_request=isinstance(d,dict) and bool(d.get('native_session'))
             if d.get('native_session'):
                 interval=d.get('interval',500)
                 if type(interval) is not int or interval not in (250,500,1000,2000,3000):raise ValueError('无效本地采集参数')
@@ -156,11 +178,15 @@ class Handler(SimpleHTTPRequestHandler):
             else:
                 answer=matcher.match(im,anchor,tracking,outdoor_mode,realtime_tracking=realtime_tracking,observation=observation)
             self.json(answer)
-        except Exception as e: self.json({'error':str(e)},400)
+        except Exception as e:
+            if native_request:
+                capture_log.exception('Native capture/match failed')
+            self.json({'error':str(e)},400)
         finally:
             if inference_locked:match_slot.release()
 
 if __name__=='__main__':
+    capture_crash_output=enable_capture_diagnostics()
     ThreadingHTTPServer.allow_reuse_address=False
     try: server=ThreadingHTTPServer(('127.0.0.1',PORT),Handler)
     except OSError:
