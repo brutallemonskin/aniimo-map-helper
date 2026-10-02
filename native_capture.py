@@ -1,12 +1,38 @@
 """Opt-in WGC window capture. Raw pixels stay in this process; no recording."""
 import ctypes as C
 from ctypes import wintypes as W
-import secrets, sys, threading, time
+import secrets, sys, threading, time, re
 from pathlib import Path
 import cv2
 
 ROOT=Path(__file__).resolve().parent
 if (ROOT/'vendor').is_dir():sys.path.insert(0,str(ROOT/'vendor'))
+
+
+def wgc_item_error(error):
+    message=str(error)
+    if 'GraphicsCaptureItem' not in message:return None
+    match=re.search(r'0x[0-9a-fA-F]{8}',message)
+    return int(match.group(),16) if match else None
+
+
+def wgc_error_message(error):
+    message=str(error)
+    if 'GraphicsCaptureItem' not in message:return message
+    code=wgc_item_error(error)
+    hints={
+        0x800706BA:'Windows 捕获服务暂时不可用，WGC 重试后仍未恢复；请重启 Windows 后重试。',
+        0x800706BE:'与 Windows 捕获服务的通信失败，WGC 重试后仍未恢复；可能是服务退出，请重启 Windows 后重试。',
+        0x80010108:'Windows 捕获服务连接已断开，重试后仍未恢复；请重启 Windows 后重试。',
+        0x80070005:'Windows 拒绝创建捕获对象；请检查系统屏幕捕获策略、窗口保护及程序权限。',
+        0x80004002:'系统未提供此 WGC 接口；请检查 Windows 版本及捕获组件是否完整。',
+        0x80040154:'Windows 捕获组件未注册或不可用；精简系统可能缺少组件。',
+        0x80070057:'Windows 不接受当前窗口或捕获参数；请重新选择仍在运行的游戏窗口。',
+        0x80070578:'目标窗口句柄已失效，请重新选择游戏窗口。',
+        0x8000000E:'捕获对象已关闭，请重新选择游戏窗口。',
+    }
+    hint=hints.get(code,'Windows 无法创建捕获对象，具体原因仍需根据下方系统错误核对。')
+    return hint+' 原始错误：'+message
 
 
 def unsupported_update_interval(error):
@@ -80,6 +106,7 @@ class NativeCapture:
         self.minimum_interval_supported=None
         self.cursor_settings_supported=None
         self.readback_pacing=False
+        self.window_pid=None
 
     def stop(self,session=None):
         with self.operations:
@@ -134,8 +161,10 @@ class NativeCapture:
             self.control=capture.start_free_threaded()
             self.report('采集线程已连接')
         # Capability errors disable only the unsupported option, independent of OS name.
-        # At most three attempts: each optional feature can be disabled only once.
-        for _ in range(3):
+        # One bounded retry for an explicit transient RPC failure. Never retry
+        # denied/unsupported/unknown errors or native process crashes blindly.
+        rpc_retried=False
+        for _ in range(4):
             limited=self.minimum_interval_supported is not False
             try:launch(limited)
             except Exception as error:
@@ -147,7 +176,15 @@ class NativeCapture:
                 elif self.cursor_settings_supported is not False and unsupported_cursor_capture(error):
                     self.cursor_settings_supported=False
                     self.report('系统不支持光标设置，使用系统默认值')
-                else:raise
+                elif not rpc_retried and wgc_item_error(error) in (0x800706BA,0x800706BE,0x80010108):
+                    rpc_retried=True
+                    self.report('Windows 捕获服务通信暂时失败；仅重试一次 WGC：'+str(error))
+                    time.sleep(.6)
+                    if self.window_pid is not None and not any(w['id']==str(self.hwnd) and w['pid']==self.window_pid for w in windows()):
+                        raise ValueError('目标窗口已变化，请重新选择游戏窗口。') from error
+                else:
+                    if 'GraphicsCaptureItem' in str(error):raise RuntimeError(wgc_error_message(error)) from error
+                    raise
             else:
                 if limited:self.minimum_interval_supported=True
                 if self.cursor_settings_supported is not False:self.cursor_settings_supported=True
@@ -155,10 +192,14 @@ class NativeCapture:
 
     def start(self,hwnd,interval):
         with self.operations:
+            version=sys.getwindowsversion()
+            self.report(f'检查 WGC 系统支持（Windows build {version.build}）')
+            if version.build<18362:
+                raise ValueError(f'当前 Windows build {version.build} 不支持 WGC 窗口捕获；需要 Windows 10 1903（18362）或更新版本。')
             self.report('检查目标窗口')
             selected=next((w for w in windows() if w['id']==str(hwnd)),None)
             if selected is None:raise ValueError('窗口已关闭或不可见，请重新选择。')
-            self.stop();self.hwnd=int(hwnd);self.sequence=0
+            self.stop();self.hwnd=int(hwnd);self.window_pid=selected['pid'];self.sequence=0
             self.session=secrets.token_hex(16);self.last_poll=self.started=time.monotonic()
             self.next_scan=0
             try:self._start_stream(interval)

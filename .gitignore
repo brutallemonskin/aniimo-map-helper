@@ -1,6 +1,8 @@
 __pycache__/
 *.py[cod]
 !vendor/windows_capture/windows_capture.pyd
+!diagnostics/upstream/windows_capture/windows_capture.pyd
+诊断报告/
 *.log
 *.pid
 overlay-settings.json

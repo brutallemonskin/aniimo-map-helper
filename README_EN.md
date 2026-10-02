@@ -1,6 +1,8 @@
+v0.4.2 improves rainbow-beam filtering, preserves WGC HRESULTs, and retries explicit transient capture-service RPC errors once. The optional **采集兼容性诊断.exe** compares direct item creation, the official library and patched capture, using only an owned fixture. Reports stay local under 诊断报告; no game screenshots are recorded or uploaded. WGC-only; failures on affected devices are not confirmed fixed.
+
 Overlay update: black map voids are transparent and dark terrain backdrops are reduced. Bright terrain and separately drawn marker artwork remain intact. The processed terrain is cached between position updates.
 
-**[Download v0.4.1](https://github.com/brutallemonskin/aniimo-map-helper/releases/tag/v0.4.1).** Uses native capture exclusively, isolates capture failures, adds detailed diagnostics, improves overlay dragging/resizing and clears expedition records on confirmed map changes. The `0xC0000409` capture startup crash reported on some Windows 10 devices remains unresolved.
+**[Download v0.4.2](https://github.com/brutallemonskin/aniimo-map-helper/releases/tag/v0.4.2).** Uses native capture exclusively, isolates capture failures, adds detailed diagnostics, improves overlay dragging/resizing and clears expedition records on confirmed map changes. The `0xC0000409` capture startup crash reported on some Windows 10 devices remains unresolved.
 
 # Aniimo Map Navigator
 

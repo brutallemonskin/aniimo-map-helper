@@ -1,5 +1,9 @@
 """Build an explicit-allowlist, relocatable Windows portable folder and ZIP."""
 import json
+import base64
+import csv
+import hashlib
+import io
 from pathlib import Path
 import shutil
 import subprocess
@@ -8,7 +12,7 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parent
 SOURCE_RUNTIME=Path(sys.executable).parent
-OUTPUT=ROOT/'portable'/'aniimo_map_helper_v0.4.1'
+OUTPUT=ROOT/'portable'/'aniimo_map_helper_v0.4.2'
 if OUTPUT.exists(): raise SystemExit('Output exists; choose a new version before rebuilding.')
 APP=OUTPUT/'app'; RUNTIME=OUTPUT/'runtime'
 APP.mkdir(parents=True); (RUNTIME/'Lib/site-packages').mkdir(parents=True)
@@ -32,12 +36,38 @@ for item in packages.iterdir():
         shutil.copytree(item,RUNTIME/'Lib/site-packages'/item.name,ignore=shutil.ignore_patterns('__pycache__','tests','test','*.pyc'))
 for item in (ROOT/'vendor').iterdir():
     if item.is_dir():shutil.copytree(item,RUNTIME/'Lib/site-packages'/item.name,ignore=shutil.ignore_patterns('__pycache__','tests','test','*.pyc'))
+# Git checkouts can normalize metadata line endings. RECORD must describe the
+# actual packaged bytes rather than retaining hashes from another checkout.
+record=RUNTIME/'Lib/site-packages/windows_capture-2.0.1.dist-info/RECORD'
+rows=[]
+for name,digest,size in csv.reader(io.StringIO(record.read_text(encoding='utf-8'))):
+    if digest:
+        content=(RUNTIME/'Lib/site-packages'/name).read_bytes()
+        digest='sha256='+base64.urlsafe_b64encode(hashlib.sha256(content).digest()).decode().rstrip('=')
+        size=str(len(content))
+    rows.append((name,digest,size))
+with record.open('w',encoding='utf-8',newline='') as output:
+    csv.writer(output,lineterminator='\n').writerows(rows)
 compiler=Path('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe')
 for output,defines in [('启动助手.exe',[]),('退出助手.exe',['/define:STOP'])]:
     subprocess.run([str(compiler),'/nologo','/target:winexe','/reference:System.Windows.Forms.dll','/reference:System.Management.dll','/out:'+str(OUTPUT/output),*defines,str(ROOT/'portable_launcher.cs'),str(ROOT/'exit_all.cs')],check=True)
-(OUTPUT/'使用说明.txt').write_text('''伊莫 · 地宫领航 便携版 v0.4.1（Windows 10/11 x64）
+DIAGNOSTICS=OUTPUT/'diagnostics'
+(DIAGNOSTICS/'upstream/windows_capture').mkdir(parents=True)
+for name in ('run_diagnostics.py','说明.txt'):
+    shutil.copy2(ROOT/'diagnostics'/name,DIAGNOSTICS/name)
+for name in ('__init__.py','windows_capture.pyd'):
+    shutil.copy2(ROOT/'diagnostics/upstream/windows_capture'/name,DIAGNOSTICS/'upstream/windows_capture'/name)
+shutil.copy2(ROOT/'diagnostics/upstream/LICENCE',DIAGNOSTICS/'upstream/LICENCE')
+for source,target,extra in [('Fixture.cs',DIAGNOSTICS/'Fixture.exe',['/target:winexe','/r:System.Windows.Forms.dll','/r:System.Drawing.dll']),
+                            ('ItemProbe.cs',DIAGNOSTICS/'ItemProbe.exe',['/target:exe']),
+                            ('Launcher.cs',OUTPUT/'采集兼容性诊断.exe',['/target:exe'])]:
+    subprocess.run([str(compiler),'/nologo','/platform:x64','/out:'+str(target),*extra,str(ROOT/'diagnostics'/source)],check=True)
+shutil.copy2(ROOT/'更新说明.txt',OUTPUT/'更新说明.txt')
+(OUTPUT/'使用说明.txt').write_text('''伊莫 · 地宫领航 便携版 v0.4.2（Windows 10/11 x64）
 
 启动时若有其他版本正在运行，会询问是否切换；同意后需重新选择游戏窗口。
+新增彩虹光柱精度改进、WGC HRESULT 诊断、有限通信重试及旧系统提示。详见根目录“更新说明.txt”。
+采集失败时可双击“采集兼容性诊断.exe”，结果保存在“诊断报告”中；无需游戏或管理员权限。
 首次打开默认中文。可在右上角切换 English，手动选择的语言偏好自动保存。
 
 1. 解压整个文件夹到可写目录，例如桌面。不要在压缩包内直接运行。

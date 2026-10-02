@@ -6,7 +6,7 @@ replace it with an unpatched PyPI wheel when testing readback pacing.
 
 1. Obtain upstream c7d106448eb9d9b251345c39047711e1cd408ae2 from
    https://github.com/NiiightmareXD/windows-capture .
-2. From its root, apply readback-pacing.patch with git apply.
+2. From its root, apply readback-pacing.patch, then wgc-errors.patch with git apply.
 3. Use Rust 1.99.0 x86_64-pc-windows-msvc and the Microsoft Windows SDK/CRT.
    The tested SDK is 10.0.26100 and CRT 14.44. Obtain these under their licenses.
 4. In an MSVC build environment, set PYO3_NO_PYTHON=1 and run:

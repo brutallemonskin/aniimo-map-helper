@@ -1,0 +1,2 @@
+# Preserve the official comparison wheel bytes across Windows checkouts.
+diagnostics/upstream/** -text

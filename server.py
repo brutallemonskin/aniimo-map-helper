@@ -42,7 +42,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
     def do_GET(self):
         path=urllib.parse.urlparse(self.path).path
-        if path=='/api/status': return self.json({'ready':matcher.ready,'indexed':len(matcher.maps),'error':matcher.error,'version':'0.4.1'})
+        if path=='/api/status': return self.json({'ready':matcher.ready,'indexed':len(matcher.maps),'error':matcher.error,'version':'0.4.2'})
         if path=='/api/overlay': return self.json(overlay.status())
         if path=='/api/overlay/hotkeys': return self.json(overlay.status()['hotkeys'])
         if path=='/api/overlay/frame':

@@ -1,0 +1,62 @@
+--- a/src/capture.rs
++++ b/src/capture.rs
+@@ -242,8 +242,8 @@
+     /// This happens when
+     /// [`crate::settings::TryIntoCaptureItemWithDetails::try_into_capture_item_with_details`]
+     /// fails for the item passed in [`crate::settings::Settings`].
+-    #[error("Failed to convert item to `GraphicsCaptureItem`")]
+-    ItemConvertFailed,
++    #[error("Failed to convert item to `GraphicsCaptureItem`: {0}")]
++    ItemConvertFailed(String),
+     /// Underlying Direct3D (D3D11) error.
+     ///
+     /// Wraps [`crate::d3d11::Error`].
+@@ -292,6 +292,7 @@
+     where
+         Self: Send + 'static,
+         <Self as GraphicsCaptureApiHandler>::Flags: Send,
++        <T as TryInto<GraphicsCaptureItemType>>::Error: std::fmt::Debug,
+     {
+         // Initialize WinRT
+         let _winrt = WinRT::new().map_err(|_| GraphicsCaptureApiError::FailedToInitWinRT)?;
+@@ -319,7 +320,7 @@
+         let mut capture = GraphicsCaptureApi::new(
+             d3d_device,
+             d3d_device_context,
+-            settings.item.try_into().map_err(|_| GraphicsCaptureApiError::ItemConvertFailed)?,
++            settings.item.try_into().map_err(|error| GraphicsCaptureApiError::ItemConvertFailed(format!("{error:?}")))?,
+             callback,
+             settings.cursor_capture_settings,
+             settings.draw_border_settings,
+@@ -370,6 +371,7 @@
+     where
+         Self: Send + 'static,
+         <Self as GraphicsCaptureApiHandler>::Flags: Send,
++        <T as TryInto<GraphicsCaptureItemType>>::Error: std::fmt::Debug,
+     {
+         let (halt_sender, halt_receiver) = mpsc::channel::<Arc<AtomicBool>>();
+         let (callback_sender, callback_receiver) = mpsc::channel::<Arc<Mutex<Self>>>();
+@@ -404,7 +406,7 @@
+             let mut capture = GraphicsCaptureApi::new(
+                 d3d_device,
+                 d3d_device_context,
+-                settings.item.try_into().map_err(|_| GraphicsCaptureApiError::ItemConvertFailed)?,
++                settings.item.try_into().map_err(|error| GraphicsCaptureApiError::ItemConvertFailed(format!("{error:?}")))?,
+                 callback.clone(),
+                 settings.cursor_capture_settings,
+                 settings.draw_border_settings,
+--- a/src/window.rs
++++ b/src/window.rs
+@@ -367,8 +367,10 @@
+     fn try_into(self) -> Result<GraphicsCaptureItemType, Self::Error> {
+         let window = HWND(self.as_raw_hwnd());
+ 
+-        let interop = windows::core::factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()?;
+-        let item = unsafe { interop.CreateForWindow(window)? };
++        let interop = windows::core::factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()
++            .map_err(|error| windows::core::Error::new(error.code(), format!("WGC activation factory: {}", error.message())))?;
++        let item = unsafe { interop.CreateForWindow(window) }
++            .map_err(|error| windows::core::Error::new(error.code(), format!("WGC CreateForWindow: {}", error.message())))?;
+ 
+         Ok(GraphicsCaptureItemType::Window((item, self)))
+     }
