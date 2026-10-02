@@ -1,3 +1,5 @@
+Overlay update: black map voids are transparent and dark terrain backdrops are reduced. Bright terrain and separately drawn marker artwork remain intact. The processed terrain is cached between position updates.
+
 **[Download v0.4.1](https://github.com/brutallemonskin/aniimo-map-helper/releases/tag/v0.4.1).** Uses native capture exclusively, isolates capture failures, adds detailed diagnostics, improves overlay dragging/resizing and clears expedition records on confirmed map changes. The `0xC0000409` capture startup crash reported on some Windows 10 devices remains unresolved.
 
 # Aniimo Map Navigator

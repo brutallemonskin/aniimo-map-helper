@@ -147,7 +147,7 @@ def render(state, opacity=190, locked=False, hotkeys=True, width=WIDTH, height=N
     scale=width/WIDTH
     height=height or round(layout_height(state)*scale)
     bar=round(BAR*scale)
-    image=Image.new('RGBA',(width,height),(9,18,25,opacity))
+    image=Image.new('RGBA',(width,height),(9,18,25,0 if state.get('image') else opacity))
     draw=ImageDraw.Draw(image)
     font=ImageFont.truetype(FONT_PATH,max(1,round(14*scale)))
     small=ImageFont.truetype(FONT_PATH,max(1,round(12*scale)))
@@ -173,6 +173,9 @@ def render(state, opacity=190, locked=False, hotkeys=True, width=WIDTH, height=N
         draw.text((90*scale,174*scale),('Open the full game map to begin' if en else '打开游戏大地图，识别后自动显示'),font=font,fill='#d1e1e3')
         draw.text((98*scale,207*scale),('Keep the helper and capture running' if en else '请保持助手页面和画面读取开启'),font=small,fill='#9db1ba')
     if not locked:
+        # Nonzero alpha keeps the resize border hittable over transparent voids.
+        edge=Image.new('L',image.size);ImageDraw.Draw(edge).rectangle((0,0,width-1,height-1),outline=1,width=max(1,round(12*scale)))
+        image.putalpha(ImageChops.lighter(image.getchannel('A'),edge))
         for offset in (7,12,17):draw.line(((WIDTH-offset)*scale,height-4*scale,(WIDTH-4)*scale,height-offset*scale),fill='#86e4c4',width=max(1,round(scale)))
     return image
 

@@ -216,7 +216,7 @@ async function publishOverlay(force=false){
        const copy=document.createElement('canvas');copy.width=Math.max(1,Math.round(b.w*raster));copy.height=Math.max(1,Math.round(b.h*raster));
        const z=Math.min(copy.width/b.w,copy.height/b.h),x=(copy.width-b.w*z)/2-b.x*z,y=(copy.height-b.h*z)/2-b.y*z;
        const markerScale=.8*z/(Math.min(504/b.w,350/b.h)*.94);
-       paintMap(copy.getContext('2d'),z,x,y,markerScale,false);
+       paintMap(copy.getContext('2d'),z,x,y,markerScale,false,overlayTerrain());
        overlayBaseCache={content:key,key:observationSession+'-map-'+(++overlayBaseSerial),image:copy.toDataURL('image/png'),w:copy.width,h:copy.height,z,x,y};
      }
      const base=overlayBaseCache;mapKey=base.key;image=base.image;
@@ -409,8 +409,24 @@ async function loadMap(id){
  $('mapinfo').textContent=`${d.name} · ${d.width} × ${d.height} · ${current.displayPoints.length} 条点位`;fit();
 }
 function fit(){if(!current)return;syncSeaRegion();const b=regionBounds()||mapBounds||{x:0,y:0,w:current.width,h:current.height};zoom=Math.min(canvas.clientWidth/b.w,canvas.clientHeight/b.h)*.90;ox=(canvas.clientWidth-b.w*zoom)/2-b.x*zoom;oy=(canvas.clientHeight-b.h*zoom)/2-b.y*zoom;draw();}
-function paintMap(ctx,zoom,ox,oy,markerScale=1,includePlayer=true){
- ctx.save();ctx.translate(ox,oy);ctx.scale(zoom,zoom);const crop=regionBounds();if(crop){ctx.beginPath();ctx.rect(crop.x,crop.y,crop.w,crop.h);ctx.clip();}ctx.drawImage(bitmap,0,0,current.width,current.height);
+// Process only terrain; point icons are drawn afterwards and keep their artwork.
+// Cache one map so position updates never repeat the pixel pass.
+let overlayTerrainCache=null;
+function overlayTerrain(){
+ if(overlayTerrainCache?.bitmap===bitmap)return overlayTerrainCache.canvas;
+ const layer=document.createElement('canvas');layer.width=bitmap.naturalWidth;layer.height=bitmap.naturalHeight;
+ const context=layer.getContext('2d');context.drawImage(bitmap,0,0);
+ const pixels=context.getImageData(0,0,layer.width,layer.height),data=pixels.data;
+ for(let i=0;i<data.length;i+=4){
+   const light=Math.max(data[i],data[i+1],data[i+2]);
+   const strength=light<=24?0:light<80?.10*(light-24)/56:Math.min(1,.10+.90*(light-80)/40);
+   data[i+3]=Math.round(data[i+3]*strength);
+ }
+ context.putImageData(pixels,0,0);overlayTerrainCache={bitmap,canvas:layer};return layer;
+}
+
+function paintMap(ctx,zoom,ox,oy,markerScale=1,includePlayer=true,terrain=bitmap){
+ ctx.save();ctx.translate(ox,oy);ctx.scale(zoom,zoom);const crop=regionBounds();if(crop){ctx.beginPath();ctx.rect(crop.x,crop.y,crop.w,crop.h);ctx.clip();}ctx.drawImage(terrain,0,0,current.width,current.height);
  const seen=new Set(),doors=[];for(const p of current.displayPoints||current.points){if(!enabled.has(p.category)||($('hide-picked').checked&&journal.picked(current.id,p)))continue;const key=p.category+':'+p.x+':'+p.y;if(seen.has(key))continue;seen.add(key);if(p.category==='entrance'||p.category==='side-entrance'){doors.push(p);continue;}const cat=current.categories.find(c=>c.id===p.category);drawMarker(p,markerStyle(p.category,cat?.color,p.name),ctx,zoom,markerScale*pointIconScale);}for(const p of doors)drawMarker(p,markerStyle(p.category),ctx,zoom,markerScale*pointIconScale);
  paintLoot(ctx,zoom,markerScale);
  if(includePlayer)paintPlayer(ctx,zoom);
