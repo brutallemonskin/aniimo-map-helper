@@ -1,5 +1,11 @@
 ## v0.4.1 · 本地采集隔离、错误诊断与悬浮窗交互
 
+### 2026-10-02 · 同版本更新
+
+- 海岛仅保留普通抢蛋模式，移除模式选择；不再索引小队海岛，当前共 32 张可识别地图。
+- 默认识别间隔改为 0.5 秒。旧的“自动性能”偏好首次更新时切到 0.5 秒，其他手动间隔保留；之后仍可自行选择自动性能。
+- 本次更新不包含 DXGI 测试采集。已下载此前 v0.4.1 的玩家需要重新下载并解压新版压缩包。
+
 相比正式版 v0.4：
 
 - **统一本地采集**：移除浏览器屏幕分享入口，保留截图导入。点击“本地采集”，手动选择伊莫窗口连接；画面仅在本机处理。
@@ -18,7 +24,7 @@
 2. 完整解压到新文件夹，不要覆盖正在运行的目录。
 3. 双击“启动助手.exe”，点击“本地采集”选择游戏窗口，再打开游戏大地图校准。
 
-浏览器已有偏好保留；新目录不会自动迁移旧目录的悬浮窗位置及快捷键文件。
+除上文所述自动性能偏好的迁移外，浏览器已有偏好保留；新目录不会自动迁移旧目录的悬浮窗位置及快捷键文件。
 
 ### 验证与已知限制
 
@@ -28,6 +34,8 @@
 - 发布包排除开发测试、测试截图、个人设置、日志与编译工具，保留素材来源及第三方许可。
 
 ### English
+
+Same-version refresh (2026-10-02): ordinary island mode only, with 32 indexed maps; default scanning is now 0.5s. Legacy Auto preferences migrate once to 0.5s; other manual intervals are preserved. Re-download the portable ZIP to update. DXGI is not included.
 
 v0.4.1 uses native window capture exclusively while retaining screenshot import. It improves overlay drag/resize recovery, clears expedition records on confirmed changes to a different map, isolates capture into a worker process, and shows original errors or crash stages and exit codes. Connection failures trigger an automatic service health check. Unsupported update-interval or cursor settings fall back individually, without a blanket Windows 10 profile; native pre-readback pacing remains enabled.
 

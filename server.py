@@ -128,8 +128,9 @@ class Handler(SimpleHTTPRequestHandler):
                 if not isinstance(p,list) or len(p)!=2 or not all(isinstance(v,(int,float)) and math.isfinite(v) and 0<=v<=10000 for v in p):raise ValueError('无效追踪位置')
                 s=tracking.get('scale')
                 if s is not None and (not isinstance(s,(int,float)) or not math.isfinite(s) or not .3<=s<=3):raise ValueError('无效小地图比例')
-            outdoor_mode=d.get('outdoor_mode','egg-heist')
-            if outdoor_mode not in ('egg-heist','egg-heist-team-mode'):raise ValueError('无效海岛模式')
+            # Old pages may still send a team-mode selection or tracking state.
+            outdoor_mode='egg-heist'
+            if tracking and tracking.get('id')=='egg-heist-team-mode':tracking=None
             realtime_tracking=d.get('realtime_tracking',True)
             if not isinstance(realtime_tracking,bool):raise ValueError('无效实时定位选项')
             observation=d.get('observation')

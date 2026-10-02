@@ -28,7 +28,7 @@ The language menu switches instantly without resetting the current map or player
 
 ## Features and limits
 
-Includes 33 maps, map matching, automatic map switching, minimap position tracking, yellow-arrow and blue/white star-pattern egg recognition, island region views and marker filters. Choose a 0.25s, 0.5s, 1s, 2s or 3s scan interval; your choice is saved. First use defaults to Automatic performance; existing manual settings are retained. Unchanged minimap results are reused, egg detection searches smaller candidate regions, uniform frames are skipped early, and slow scans leave idle time. Processing time depends on hardware.
+Includes 32 maps (ordinary island mode only), map matching, automatic map switching, minimap position tracking, yellow-arrow and blue/white star-pattern egg recognition, island region views and marker filters. Choose a 0.25s, 0.5s, 1s, 2s or 3s scan interval; your choice is saved. First use defaults to 0.5 seconds. Legacy Automatic preferences migrate once to 0.5 seconds; other manual settings are retained. Automatic performance remains available as an optional setting. Unchanged minimap results are reused, egg detection searches smaller candidate regions, uniform frames are skipped early, and slow scans leave idle time. Processing time depends on hardware.
 
 When the map is obscured or cannot be matched, the helper keeps the last known position. This is not a guarantee that the player has remained stationary. Reopen the full game map to recalibrate if tracking drifts.
 

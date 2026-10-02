@@ -8,7 +8,7 @@ const cadence=new NavigatorTools.AdaptiveCadence(),journal=new NavigatorTools.Ru
 let recoveryActive=false,navEnabled=false,navTarget=null,selectedPoint=null,navPath=[],navRequest=0,navBusy=false,navAt=0,navOrigin=null,navMessage='',navStops=[],navUnreachable=[];
 let navPending=false,navRetryAt=0,navController=null;
 function writeText(id,value){const el=$(id);if(el.textContent!==value)el.textContent=value;}
-function effectiveInterval(){return $('interval').value==='auto'?cadence.interval:Number($('interval').value)||250;}
+function effectiveInterval(){return $('interval').value==='auto'?cadence.interval:Number($('interval').value)||500;}
 function resetNavigation(){clearRoute();journal.reset();cadence.reset();selectedPoint=null;recoveryActive=false;}
 function syncQuality(){
  const active=result?.position&&result.id===current?.id&&!result.held;
@@ -432,7 +432,7 @@ function draw(){
 let drag=null;canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,ox,oy};canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(drag){ox=drag.ox+e.clientX-drag.x;oy=drag.oy+e.clientY-drag.y;draw();}};canvas.onpointerup=e=>{if(drag&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<5&&current){const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left-ox)/zoom,y=(e.clientY-r.top-oy)/zoom;const near=(current.displayPoints||current.points).filter(p=>enabled.has(p.category)&&(!$('hide-picked').checked||!journal.picked(current.id,p))&&Math.hypot(p.x-x,p.y-y)<20/zoom);if(near.length)choosePoint(near.sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y))[0]);$('tooltip').textContent=[...new Set(near.map(p=>pointName(p)))].join(' / ');$('tooltip').style.display=near.length?'block':'none';}drag=null;};canvas.onwheel=e=>{e.preventDefault();const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const z=Math.max(.08,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));ox=x-(x-ox)*z/zoom;oy=y-(y-oy)*z/zoom;zoom=z;draw();};
 new ResizeObserver(()=>fit()).observe($('mapwrap'));
 function preview(){if(!frame)return;const w=frame.videoWidth||frame.width,h=frame.videoHeight||frame.height,s=Math.min(1,800/Math.max(w,h));const pw=Math.round(w*s),ph=Math.round(h*s);if(cap.width!==pw||cap.height!==ph){cap.width=pw;cap.height=ph;}cc.clearRect(0,0,cap.width,cap.height);cc.drawImage(frame,0,0,cap.width,cap.height);$('empty').hidden=true;}
-$('newrun').onclick=newRun;$('outdoor-mode').onchange=()=>{newRun();notice('海岛模式已更换，请打开大地图重新校准。');};
+$('newrun').onclick=newRun;
 async function importFile(file){if(!file||!file.type.startsWith('image/'))return;stop();const im=await createImageBitmap(file);frame=im;cap.width=im.width;cap.height=im.height;newRun();$('capture-status').textContent='截图模式';preview();await identify();}
 $('file').onchange=e=>importFile(e.target.files[0]).catch(e=>notice(e.message));document.onpaste=e=>{const f=[...e.clipboardData.items].find(i=>i.type.startsWith('image/'));if(f)importFile(f.getAsFile()).catch(e=>notice(e.message));};
 let captureEpoch=0,firstFrameDeadline=0,receivedCaptureFrame=false;
@@ -522,12 +522,12 @@ function capturePayload(forceFull=false){
   if(full)lastFullFrameAt=performance.now();
   const preview=performance.now()-nativePreviewAt>=1000;
   if(preview)nativePreviewAt=performance.now();
-  return {sig:null,payload:{native_session:nativeSession,after:nativeSequence,interval:captureInterval(),force_full:full,preview,loot:realtimeTracking&&$('loot-enabled').checked,tracking,outdoor_mode:$('outdoor-mode').value,realtime_tracking:realtimeTracking,observation:{session:observationSession+'-'+generation,sequence:1,captured_at:Date.now()}}};
+  return {sig:null,payload:{native_session:nativeSession,after:nativeSequence,interval:captureInterval(),force_full:full,preview,loot:realtimeTracking&&$('loot-enabled').checked,tracking,realtime_tracking:realtimeTracking,observation:{session:observationSession+'-'+generation,sequence:1,captured_at:Date.now()}}};
  }
  // Imported screenshots use a single full-frame request; live cropping is native.
  const w=frame.width,h=frame.height;
  temp.width=w;temp.height=h;tc.drawImage(frame,0,0,w,h);
- return {payload:{anchor:null,tracking,outdoor_mode:$('outdoor-mode').value,realtime_tracking:realtimeTracking,capture_kind:'full',image:temp.toDataURL('image/jpeg',.9)},sig:signature()};
+ return {payload:{anchor:null,tracking,realtime_tracking:realtimeTracking,capture_kind:'full',image:temp.toDataURL('image/jpeg',.9)},sig:signature()};
 }
 
 async function requestMatch(payload){
@@ -617,5 +617,11 @@ function pointName(point){
 window.addEventListener('languagechange',()=>{draw();publishOverlay(true);});
 
 // Restore only supported intervals; storage may be unavailable in private mode.
-try { const saved=localStorage.getItem('aniimo-scan-interval'); if(['auto','250','500','1000','2000','3000'].includes(saved)) $('interval').value=saved; } catch(e) {}
+try {
+ const saved=localStorage.getItem('aniimo-scan-interval');
+ const migrateAuto=localStorage.getItem('aniimo-interval-default-version')!=='2'&&saved==='auto';
+ if(!migrateAuto&&['auto','250','500','1000','2000','3000'].includes(saved)) $('interval').value=saved;
+ if(migrateAuto)localStorage.setItem('aniimo-scan-interval','500');
+ localStorage.setItem('aniimo-interval-default-version','2');
+} catch(e) {}
 $('interval').onchange=()=>{syncQuality();try {localStorage.setItem('aniimo-scan-interval',$('interval').value);} catch(e) {}};

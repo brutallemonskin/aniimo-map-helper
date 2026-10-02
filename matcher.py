@@ -33,7 +33,7 @@ class Matcher:
             self.ready = False
             read_image(ROOT/'data/player-egg-template.png')
             for m in json.loads((ROOT/'data/catalog.json').read_text(encoding='utf8')):
-                if not (m['id'].startswith('sanctum-') or m['id'].startswith('egg-heist')): continue
+                if not (m['id'].startswith('sanctum-') or m['id']=='egg-heist'): continue
                 im = read_image(str(ROOT / m['image'].lstrip('/')))
                 if im.shape[1] < 512: raise ValueError('Map image too small: '+m['id'])
                 scale = min(1., 1400/im.shape[1])
@@ -94,7 +94,7 @@ class Matcher:
             bf = cv2.BFMatcher()
             results = []
             for m, scale, target, desc in self.maps:
-                if m['id'].startswith('egg-heist') and m['id']!=outdoor_mode:continue
+                if m['id'].startswith('egg-heist') and m['id']!='egg-heist':continue
                 if desc is None: continue
                 pairs = bf.knnMatch(des, desc, k=2)
                 good = [a for a,b in pairs if a.distance < .70*b.distance]
