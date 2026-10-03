@@ -1,7 +1,7 @@
 """Conservative atlas-only route hints. Unknown terrain is never bridged."""
 from pathlib import Path
 from collections import OrderedDict
-import heapq, json, math, re, threading
+import hashlib, heapq, json, math, re, threading
 import cv2
 import numpy as np
 from image_io import read_image
@@ -13,11 +13,15 @@ class RoutePlanner:
         self.root=Path(root);self.cache=OrderedDict();self.tour_cache=OrderedDict();self.lock=threading.Lock()
 
     @staticmethod
-    def floor_grid(image):
+    def floor_grid(image,passages=()):
         # Bright neutral floor only; preserve dark walls and unknown areas.
         hsv=cv2.cvtColor(image[:,:,:3],cv2.COLOR_BGR2HSV)
         floor=((hsv[:,:,2]>=135)&(hsv[:,:,1]<=65)).astype(np.uint8)
         if image.shape[2]==4:floor[image[:,:,3]<200]=0
+        # Only individually reviewed stair/door artwork may override the floor
+        # mask. Do not close gaps globally: those can be walls or missing levels.
+        for x0,y0,x1,y1 in passages:
+            floor[y0:y1,x0:x1]=1
         floor=cv2.erode(floor,np.ones((3,3),np.uint8))
         h,w=floor.shape;s=RoutePlanner.STEP
         return floor[:h-h%s,:w-w%s].reshape(h//s,s,w//s,s).min(axis=(1,3)).astype(bool)
@@ -25,9 +29,19 @@ class RoutePlanner:
     def grid(self,map_id):
         if map_id not in self.cache:
             data=json.loads((self.root/'data'/f'{map_id}.json').read_text(encoding='utf8'))
-            im=read_image(self.root/data['image'].lstrip('/'),cv2.IMREAD_UNCHANGED)
+            image_path=self.root/data['image'].lstrip('/')
+            im=read_image(image_path,cv2.IMREAD_UNCHANGED)
             if im is None:raise ValueError('地图底图不可用')
-            self.cache[map_id]=self.floor_grid(im)
+            correction=data.get('routePassages',{})
+            passages=[]
+            # A replacement image invalidates reviewed coordinates automatically.
+            if correction.get('imageSha256')==hashlib.sha256(image_path.read_bytes()).hexdigest():
+                for entry in correction.get('rectangles',[]):
+                    rect=entry.get('bounds',[])
+                    if (len(rect)==4 and all(type(v) is int for v in rect)
+                            and 0<=rect[0]<rect[2]<=im.shape[1]
+                            and 0<=rect[1]<rect[3]<=im.shape[0]):passages.append(rect)
+            self.cache[map_id]=self.floor_grid(im,passages)
             if len(self.cache)>4:self.cache.popitem(last=False)
         self.cache.move_to_end(map_id)
         return self.cache[map_id]
@@ -49,7 +63,7 @@ class RoutePlanner:
         def point(p):return isinstance(p,list) and len(p)==2 and all(type(v) in (int,float) and math.isfinite(v) and 0<=v<10000 for v in p)
         if not isinstance(map_id,str) or not re.fullmatch(r'sanctum-[a-z0-9-]+',map_id):raise ValueError('参考路线暂仅支持地宫')
         if not (self.root/'data'/f'{map_id}.json').is_file():raise ValueError('未知地图')
-        if not point(start) or not isinstance(targets,list) or not 1<=len(targets)<=32:raise ValueError('无效路线起点或目标')
+        if not point(start) or not isinstance(targets,list) or not 1<=len(targets)<=64:raise ValueError('无效路线起点或目标')
         for t in targets:
             if not isinstance(t,dict) or not point(t.get('position')) or not isinstance(t.get('key'),str) or len(t['key'])>256:raise ValueError('无效路线目标')
         with self.lock:

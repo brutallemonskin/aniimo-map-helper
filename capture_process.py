@@ -58,7 +58,7 @@ def capture_worker(connection, log_root):
             action = request['action']
             try:
                 if action == 'start':
-                    value = capture.start(request['window'], request['interval'])
+                    value = capture.start(request['window'], request['interval'], request.get('window_pid'))
                 elif action == 'take':
                     frame, message = capture.take(request['session'], request['after'], request['interval'])
                     if frame is None:
@@ -150,7 +150,7 @@ class IsolatedCapture:
         self._dispose()
         raise ValueError(message)
 
-    def start(self, hwnd, interval):
+    def start(self, hwnd, interval, expected_pid=None):
         with self.operations:
             self.stop()
             context = mp.get_context('spawn')
@@ -163,7 +163,7 @@ class IsolatedCapture:
             try:
                 self.process.start()
                 child.close()
-                result = self._rpc({'action': 'start', 'window': hwnd, 'interval': interval}, '启动采集')
+                result = self._rpc({'action': 'start', 'window': hwnd, 'window_pid': expected_pid, 'interval': interval}, '启动采集')
                 self.session = result['session']; self.next_scan = 0
                 return result
             except Exception:

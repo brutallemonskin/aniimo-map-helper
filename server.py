@@ -9,6 +9,7 @@ from overlay_bridge import OverlayBridge
 from route_planner import RoutePlanner
 from native_capture import windows, small_preview
 from capture_process import IsolatedCapture
+from field_notes import FieldNotes
 
 ROOT=Path(__file__).resolve().parent
 PORT=int(os.environ.get('ANIIMO_PORT','18731'))
@@ -16,6 +17,7 @@ matcher=Matcher()
 overlay=OverlayBridge(ROOT)
 route_planner=RoutePlanner(ROOT)
 native=IsolatedCapture(ROOT)
+field_notes=FieldNotes(ROOT)
 match_slot=threading.Lock()
 capture_log=logging.getLogger('aniimo.capture')
 capture_log.addHandler(logging.NullHandler())
@@ -34,22 +36,36 @@ def enable_capture_diagnostics():
     except OSError:
         return None
 
+class LocalHTTPServer(ThreadingHTTPServer):
+    # A page reload requests several scripts while cancelled route requests may
+    # still be finishing. Windows can reject connects when the default queue (5)
+    # fills between accept cycles; leave room for one browser's parallel loads.
+    request_queue_size=64
+    allow_reuse_address=False
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self,*a,**kw): super().__init__(*a,directory=str(ROOT),**kw)
     def log_message(self,*a): pass
+    def handle(self):
+        try: return super().handle()
+        except ConnectionError: pass  # Browser cancelled/reloaded; no second response.
     def json(self,obj,status=200):
-        b=json.dumps(obj,ensure_ascii=False).encode(); self.send_response(status)
-        self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
+        b=json.dumps(obj,ensure_ascii=False).encode()
+        try:
+            self.send_response(status)
+            self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
+        except ConnectionError: pass
     def do_GET(self):
         path=urllib.parse.urlparse(self.path).path
-        if path=='/api/status': return self.json({'ready':matcher.ready,'indexed':len(matcher.maps),'error':matcher.error,'version':'0.4.2'})
+        if path=='/api/status': return self.json({'ready':matcher.ready,'indexed':len(matcher.maps),'error':matcher.error,'version':'0.4.3'})
         if path=='/api/overlay': return self.json(overlay.status())
         if path=='/api/overlay/hotkeys': return self.json(overlay.status()['hotkeys'])
         if path=='/api/overlay/frame':
             query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             return self.json(overlay.snapshot(query.get('image_key',[None])[0]))
         if path=='/': self.path='/index.html'
-        elif path not in ('/index.html','/app.js','/assist.js','/hotkey-settings.js','/style.css','/i18n.js') and not (path.startswith('/data/') and '..' not in urllib.parse.unquote(path)):
+        elif path not in ('/index.html','/app.js','/assist.js','/route-goals.js','/field-notes.js','/hotkey-settings.js','/style.css','/i18n.js') and not (path.startswith('/data/') and '..' not in urllib.parse.unquote(path)):
             return self.send_error(404)
         return super().do_GET()
     def do_POST(self):
@@ -63,6 +79,24 @@ class Handler(SimpleHTTPRequestHandler):
             self.json({'stopped':True})
             threading.Thread(target=self.server.shutdown,daemon=True).start()
             return
+        if self.path=='/api/notes':
+            try:
+                n=int(self.headers.get('Content-Length','0'))
+                if not 0<n<800000:raise ValueError('记录请求过大')
+                d=json.loads(self.rfile.read(n))
+                if not isinstance(d,dict):raise ValueError('无效记录请求')
+                action=d.get('action')
+                if action=='list':return self.json({'records':field_notes.list()})
+                if action=='detail':return self.json(field_notes.detail(d.get('id')))
+                if action=='save':return self.json(field_notes.save(d.get('record')))
+                if action=='delete':return self.json(field_notes.delete(d.get('id'),d.get('revision')))
+                if action=='export':
+                    data=field_notes.export(d.get('map'))
+                    self.send_response(200);self.send_header('Content-Type','application/zip')
+                    self.send_header('Content-Disposition','attachment; filename="aniimo-map-feedback.zip"')
+                    self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data);return
+                raise ValueError('无效记录操作')
+            except (ValueError,OSError,TypeError,KeyError) as e:return self.json({'error':str(e)},400)
         if self.path=='/api/native':
             try:
                 n=int(self.headers.get('Content-Length','0'))
@@ -73,7 +107,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if action=='start':
                     interval=d.get('interval',500)
                     if type(interval) is not int or interval not in (250,500,1000,2000,3000):raise ValueError('无效间隔')
-                    return self.json(native.start(d.get('window'),interval))
+                    return self.json(native.start(d.get('window'),interval,d.get('window_pid')))
                 raise ValueError('无效采集操作')
             except Exception as e:
                 capture_log.exception('Native capture request failed')
@@ -188,8 +222,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__=='__main__':
     capture_crash_output=enable_capture_diagnostics()
-    ThreadingHTTPServer.allow_reuse_address=False
-    try: server=ThreadingHTTPServer(('127.0.0.1',PORT),Handler)
+    try: server=LocalHTTPServer(('127.0.0.1',PORT),Handler)
     except OSError:
         print('Port 18731 is already in use. Existing assistant may be running.');sys.exit(1)
     (ROOT/'server.pid').write_text(str(__import__('os').getpid()))

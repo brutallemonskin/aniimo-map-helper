@@ -25,6 +25,17 @@ FONT_PATH = 'C:/Windows/Fonts/msyh.ttc'
 SETTINGS = Path(__file__).resolve().parent/'overlay-settings.json'
 
 
+def exclude_from_capture(hwnd):
+    # Earlier builds turn this flag into a black rectangle instead of exclusion.
+    if sys.getwindowsversion().build<19041:return False
+    user=C.WinDLL('user32',use_last_error=True)
+    user.SetWindowDisplayAffinity.argtypes=[W.HWND,W.DWORD]
+    user.SetWindowDisplayAffinity.restype=W.BOOL
+    ok=bool(user.SetWindowDisplayAffinity(hwnd,0x11))
+    if not ok:print(f'Overlay capture exclusion unavailable: WinError {C.get_last_error()}',flush=True)
+    return ok
+
+
 def resize_rect(rect, delta, edges, maximum=2080, aspect=HEIGHT/WIDTH):
     x,y,w,h=rect; dx,dy=delta
     changes=[]
@@ -103,6 +114,13 @@ def paint_navigation(source,state):
         x,y=project(p);x+=12*ink;y-=12*ink;r=max(6,8*ink)
         draw.ellipse((x-r,y-r,x+r,y+r),fill=(186,37,47,255))
         draw.text((x,y),str(i),font=font,fill='white',anchor='mm')
+
+    for p in nav.get('unreachable',[]):
+        x,y=project(p);r=max(10,17*ink)
+        draw.ellipse((x-r,y-r,x+r,y+r),outline=(255,205,72,255),width=max(2,round(3*ink)))
+        x+=15*ink;y-=15*ink;r=max(6,9*ink)
+        draw.ellipse((x-r,y-r,x+r,y+r),fill=(255,205,72,255))
+        draw.text((x,y),'?',font=font,fill=(48,35,0,255),anchor='mm')
 
     source.alpha_composite(layer)
 
@@ -445,6 +463,7 @@ def main(smoke=False):
     # Layered, topmost and non-activating; taskbar entry provides another recovery path.
     hwnd = user.CreateWindowExW(0x80000 | 0x8 | 0x40000 | 0x8000000, name, '伊莫地图悬浮窗', 0x80000000, x, y, window_width, window_height, None, None, instance, None)
     if not hwnd: raise C.WinError(C.get_last_error())
+    exclude_from_capture(hwnd)
     bindings=HotkeyBindings(lambda ident,mods,key:user.RegisterHotKey(hwnd,ident,mods,key),lambda ident:user.UnregisterHotKey(hwnd,ident))
     if smoke:state['hotkeys']={'revision':0,'bindings':DEFAULTS};apply_hotkeys()
     paint()

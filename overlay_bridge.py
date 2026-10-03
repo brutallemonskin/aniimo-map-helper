@@ -82,7 +82,7 @@ class OverlayBridge:
         navigation=payload.get('navigation')
         if navigation is not None:
             if not isinstance(navigation,dict) or type(navigation.get('held')) is not bool:raise ValueError('无效导航标记')
-            for field,limit in (('trail',600),('path',4096),('stops',32)):
+            for field,limit in (('trail',600),('path',4096),('stops',64),('unreachable',64)):
                 points=navigation.get(field,[])
                 if not isinstance(points,list) or len(points)>limit:raise ValueError('导航轨迹过大')
                 for p in points:

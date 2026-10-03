@@ -1,8 +1,8 @@
-v0.4.2 improves rainbow-beam filtering, preserves WGC HRESULTs, and retries explicit transient capture-service RPC errors once. The optional **采集兼容性诊断.exe** compares direct item creation, the official library and patched capture, using only an owned fixture. Reports stay local under 诊断报告; no game screenshots are recorded or uploaded. WGC-only; failures on affected devices are not confirmed fixed.
+v0.4.3 adds selectable route goals, persistent numbered player map notes with annotated PNG exports, reviewed passages on Sanctum 35, and stricter capture-window identity checks. The optional WGC diagnostics now distinguish support, window/monitor/picker item creation and actual frame delivery, with read-only service and related event metadata. WGC-only; affected-device failures are not confirmed fixed.
 
 Overlay update: black map voids are transparent and dark terrain backdrops are reduced. Bright terrain and separately drawn marker artwork remain intact. The processed terrain is cached between position updates.
 
-**[Download v0.4.2](https://github.com/brutallemonskin/aniimo-map-helper/releases/tag/v0.4.2).** Uses native capture exclusively, isolates capture failures, adds detailed diagnostics, improves overlay dragging/resizing and clears expedition records on confirmed map changes. The `0xC0000409` capture startup crash reported on some Windows 10 devices remains unresolved.
+**[Download v0.4.3](https://github.com/brutallemonskin/aniimo-map-helper/releases/tag/v0.4.3).** Uses native capture exclusively, isolates capture failures, adds detailed diagnostics, improves overlay dragging/resizing and clears expedition records on confirmed map changes. The `0xC0000409` capture startup crash reported on some Windows 10 devices remains unresolved.
 
 # Aniimo Map Navigator
 
@@ -15,7 +15,7 @@ A local map companion for Aniimo's Egg Heist mode on Windows 10/11 x64.
 3. Open the helper in Chrome or Edge. Choose **English** in the top-right language menu.
 4. Click **Local capture**, select the Aniimo window and connect. This is the only live capture method; screenshot import remains available.
 5. Enter a dungeon and open the full game map to identify the map and calibrate your position.
-6. Close the game map to continue tracking from the minimap. Keep the helper and screen sharing running.
+6. Close the game map to continue tracking from the minimap. Keep the helper and native capture running.
 7. Use **Game overlay** to display the translucent map over the game.
 8. Confirmed map changes automatically clear old trails, collected markers, loot and routes. Use **New run** if the next run uses the same layout. Double-click **退出助手.exe** (Exit helper) when finished. It closes helper services and overlays across folders and versions in your current desktop session, including native capture; unrelated Python programs are preserved. Close the helper browser tabs or stop browser sharing separately.
 
@@ -96,9 +96,9 @@ Improved sparse entrance alignment and blue-marker filtering. Failed minimap tra
 
 The Automatic performance option adapts the scan interval using processing time and confirmed movement; manual intervals remain available. This estimates load, not CPU utilization. Position state and age are shown explicitly.
 
-Optional red tours visit all unfinished egg nests along confirmed atlas passages, starting at your position without returning. Numbers indicate stop order; deep blue shows the traveled trail. Marker visibility does not filter the tour. Current atlas sizes use an exact shortest open tour; disconnected nests are explicitly counted. Locks, elevation and mechanisms must be checked in game; outdoor routing is not supported. Click markers to confirm collection; collection replans the remaining tour and supports undo. Traveled red segments disappear while blue trails remain. Sustained deviations trigger replanning with a 10-second minimum cooldown; lost positions and jumps do not erase unobserved segments. Trails contain at most 600 recent confirmed points. New runs, new capture sessions and reloads clear expedition data.
+Optional red tours visit all unfinished egg nests along confirmed atlas passages, starting at your position without returning. Numbers indicate stop order; deep blue shows the traveled trail. Marker visibility does not filter the tour. Up to 12 reachable targets use exact ordering; larger selections use heuristic optimization without a global-optimality guarantee. Disconnected targets are explicitly listed. Locks, elevation and mechanisms must be checked in game; outdoor routing is not supported. Click markers to confirm collection; collection replans the remaining tour and supports undo. Traveled red segments disappear while blue trails remain. Sustained deviations trigger replanning with a 10-second minimum cooldown; lost positions and jumps do not erase unobserved segments. Trails contain at most 600 recent confirmed points. New runs, new capture sessions and reloads clear expedition data.
 
-Validated with existing screenshots, movement replay, simulated slow processing and UI/package regression checks; no new live-game validation yet. Test assets are excluded from the portable package.
+Validated with existing screenshots, movement replay, simulated slow processing and UI/package regression checks; no new live-game validation yet. Private developer test assets are excluded; the optional public compatibility tool includes its own dynamic fixture.
 
 ## v0.3.9 overlay and route fixes
 
@@ -114,3 +114,11 @@ Validated with an owned Windows window replaying game screenshots, including ful
 Preserves the original map pixels up to a 2048px longest edge and renders directly at the physical window size. Marker display scale and filter synchronization are preserved. Cached map resizing and unchanged-frame skipping reduce repeated work; player movement still uses coordinate-only updates. Capture and recognition rates do not increase. Higher-resolution caches use some additional memory. Original asset detail remains the limit.
 
 Native capture now runs in an isolated process. Library errors are shown directly; unexpected worker exits report the stage and exit code without terminating the HTTP service. Exit codes alone do not establish the root cause. Requests time out after 10 seconds. Frames use local shared memory plus a stable copy for recognition, adding memory/copy overhead. Network failures trigger an automatic service health check.
+
+## Route goals and field notes
+
+Choose nests, gold chests, both, or individual targets (including merchants and the side entrance). Completed points are excluded; marker visibility does not affect routing. Routes sync to the overlay. Door locks and elevation changes still require in-game checks.
+
+Right-click the main web map or use **+ Map note**, then select a location. Record marker corrections, two-endpoint passages, monsters or spawns. Map, coordinates and time are automatic. Screenshots are attached only on explicit request. Click a note marker or its list entry to edit/delete. Unverified notes do not modify routes or official data, and do not appear on the overlay.
+
+Notes survive new runs, refreshes and restarts under `app/user-data/map-notes/` (or `user-data/map-notes/` beside the source). ZIP export includes annotated map PNGs, readable TXT, JSON and explicitly attached screenshots, without automatic upload. Preserve this folder when moving to a new extracted version.

@@ -57,10 +57,25 @@ def window_api():
     api.IsIconic.argtypes=[W.HWND];api.IsIconic.restype=W.BOOL
     api.GetWindowTextLengthW.argtypes=[W.HWND];api.GetWindowTextLengthW.restype=C.c_int
     api.GetWindowTextW.argtypes=[W.HWND,W.LPWSTR,C.c_int];api.GetWindowTextW.restype=C.c_int
+    api.GetClassNameW.argtypes=[W.HWND,W.LPWSTR,C.c_int];api.GetClassNameW.restype=C.c_int
     api.GetClientRect.argtypes=[W.HWND,C.POINTER(W.RECT)]
     api.ClientToScreen.argtypes=[W.HWND,C.POINTER(W.POINT)]
     api.GetWindowThreadProcessId.argtypes=[W.HWND,C.POINTER(W.DWORD)]
+    api.GetWindowThreadProcessId.restype=W.DWORD
     return api
+
+def window_identity(hwnd,api=None):
+    api=api or window_api()
+    if not api.IsWindow(hwnd):return None
+    pid=W.DWORD();thread=api.GetWindowThreadProcessId(hwnd,C.byref(pid))
+    name=C.create_unicode_buffer(256)
+    if not thread or not pid.value or not api.GetClassNameW(hwnd,name,256):return None
+    return (pid.value,thread,name.value)
+
+
+def helper_window(title,identity):
+    return identity[2]=='AniimoLocalMapOverlay' or '地宫领航' in title or 'Aniimo · Dungeon Navigator' in title
+
 
 def windows():
     api=window_api();items=[]
@@ -72,10 +87,11 @@ def windows():
         size=api.GetWindowTextLengthW(hwnd)
         if not size:return True
         title=C.create_unicode_buffer(size+1);api.GetWindowTextW(hwnd,title,size+1)
+        identity=window_identity(hwnd,api)
+        if identity is None or helper_window(title.value,identity):return True
         rect=W.RECT();api.GetClientRect(hwnd,C.byref(rect))
         if rect.right<320 or rect.bottom<200:return True
-        pid=W.DWORD();api.GetWindowThreadProcessId(hwnd,C.byref(pid))
-        items.append({'id':str(hwnd),'title':title.value,'pid':pid.value})
+        items.append({'id':str(hwnd),'title':title.value,'pid':identity[0]})
         return True
     api.EnumWindows(visit,0)
     return items
@@ -107,6 +123,16 @@ class NativeCapture:
         self.cursor_settings_supported=None
         self.readback_pacing=False
         self.window_pid=None
+        self.window_identity=None
+
+    def _validate_target(self,api=None):
+        if self.window_pid is None:return
+        identity=window_identity(self.hwnd,api)
+        if (identity is None or identity[0]!=self.window_pid
+                or identity[2]=='AniimoLocalMapOverlay'
+                or (self.window_identity is not None and identity!=self.window_identity)):
+            self.stop()
+            raise ValueError('原游戏窗口已关闭或发生变化，已停止采集；请重新选择游戏窗口。不会自动切换到其他窗口。')
 
     def stop(self,session=None):
         with self.operations:
@@ -128,6 +154,7 @@ class NativeCapture:
         with self.lock:self.latest=None
         self.interval=interval;self.changed=time.monotonic();self.capture=None
         def launch(limited):
+            self._validate_target()
             # Separate generations also invalidate callbacks from a failed attempt.
             self.epoch+=1;epoch=self.epoch;self.closed=False;last_retained=None
             options={'cursor_capture':None if self.cursor_settings_supported is False else False,'window_hwnd':self.hwnd}
@@ -190,7 +217,7 @@ class NativeCapture:
                 if self.cursor_settings_supported is not False:self.cursor_settings_supported=True
                 break
 
-    def start(self,hwnd,interval):
+    def start(self,hwnd,interval,expected_pid=None):
         with self.operations:
             version=sys.getwindowsversion()
             self.report(f'检查 WGC 系统支持（Windows build {version.build}）')
@@ -199,7 +226,13 @@ class NativeCapture:
             self.report('检查目标窗口')
             selected=next((w for w in windows() if w['id']==str(hwnd)),None)
             if selected is None:raise ValueError('窗口已关闭或不可见，请重新选择。')
+            if expected_pid is not None and (type(expected_pid) is not int or expected_pid!=selected['pid']):
+                raise ValueError('窗口列表已过期，请刷新后重新选择游戏窗口。')
+            identity=window_identity(int(hwnd))
+            if identity is None or identity[0]!=selected['pid'] or helper_window(selected['title'],identity):
+                raise ValueError('目标窗口已变化或属于助手自身，请重新选择游戏窗口。')
             self.stop();self.hwnd=int(hwnd);self.window_pid=selected['pid'];self.sequence=0
+            self.window_identity=identity
             self.session=secrets.token_hex(16);self.last_poll=self.started=time.monotonic()
             self.next_scan=0
             try:self._start_stream(interval)
@@ -231,6 +264,7 @@ class NativeCapture:
         with self.operations:
             if not self.session or session!=self.session:raise ValueError('本地采集已停止，请重新选择窗口。')
             self.last_poll=time.monotonic();api=window_api()
+            self._validate_target(api)
             if not api.IsWindow(self.hwnd) or self.closed:raise ValueError('游戏窗口已关闭或采集已结束，请重新连接。')
             if api.IsIconic(self.hwnd):return None,'窗口已最小化 · 保留位置'
             if interval!=self.interval and self.last_poll-self.changed>=3:

@@ -2,7 +2,7 @@ const $=id=>document.getElementById(id), cap=$('capture'), cc=cap.getContext('2d
 let catalog=[], current=null, bitmap=null, zoom=1, ox=0, oy=0, enabled=new Set(), result=null, mapBounds=null, mapLoadVersion=0;
 let frame=null, busy=false, timer=null, running=false, history=[], lastSignature=null, generation=0;
 let tracking=null, trackedAt=0, lastKnown=null, confirmedMapId=null;
-let lastFullFrameAt=-Infinity;
+let lastFullFrameAt=-Infinity,previewFrameAt=0;
 let observationSession=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
 const cadence=new NavigatorTools.AdaptiveCadence(),journal=new NavigatorTools.RunJournal(),routeFollower=new NavigatorTools.RouteFollower();
 let recoveryActive=false,navEnabled=false,navTarget=null,selectedPoint=null,navPath=[],navRequest=0,navBusy=false,navAt=0,navOrigin=null,navMessage='',navStops=[],navUnreachable=[];
@@ -29,7 +29,12 @@ function refreshRoute(){
 }
 function selectableTargets(){
  if(!current)return [];
- return (current.displayPoints||current.points).filter(p=>p.category==='egg-nests'&&!journal.picked(current.id,p));
+ const points=typeof RouteGoals!=='undefined'?RouteGoals.targets(current):(current.displayPoints||current.points).filter(p=>p.category==='egg-nests');
+ return points.filter(p=>!journal.picked(current.id,p));
+}
+function unresolvedNestPositions(){
+ const keys=new Set(navUnreachable);
+ return selectableTargets().filter(p=>keys.has(NavigatorTools.pointKey(p))).map(p=>[p.x,p.y]);
 }
 async function updateRoute(force=false){
  if(force&&navEnabled){navPending=true;navRetryAt=0;}
@@ -39,40 +44,48 @@ async function updateRoute(force=false){
  const reroute=!!navOrigin;
  if(!force&&reroute&&!navPending&&!routeFollower.shouldReplan(position,now))return;
  const targets=selectableTargets();
- if(!targets.length){clearRoute('本图蛋巢已全部完成或暂无蛋巢');navOrigin=position;navAt=now;renderNavigation();return;}
+ if(!targets.length){clearRoute('所选目标已完成或尚未选择目标');navOrigin=position;navAt=now;renderNavigation();return;}
  navBusy=true;navPending=true;navAt=now;routeFollower.attempt(position,now);const token=++navRequest,map=current.id,run=generation;
  const controller=new AbortController();navController=controller;const timeout=setTimeout(()=>controller.abort(),15000);
- navMessage=reroute?'正在更新剩余蛋巢路线':'正在计算参考路线';renderNavigation();
+ navMessage=reroute?'正在更新剩余目标路线':'正在计算参考路线';renderNavigation();
  try{
    const response=await fetch('/api/route',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({map,position,mode:'egg-tour',targets:targets.map(p=>({key:NavigatorTools.pointKey(p),position:[p.x,p.y]}))})});
   const out=await response.json();if(!response.ok)throw Error(out.error||'路线暂不可用');
   if(token!==navRequest||run!==generation||map!==current?.id||!navEnabled||result?.held)return;
   const liveKeys=new Set(targets.map(NavigatorTools.pointKey)),nextKeys=new Set((out.stops||[]).map(s=>s.key));
   const losesRemainder=navPath.length>1&&navStops.some(s=>liveKeys.has(s.key)&&!nextKeys.has(s.key));
-  if(out.status!=='ok'||!out.path?.length||losesRemainder)throw Error(out.reason||'路线暂不可用');
+  const unresolvedKeys=new Set(out.unreachable||[]),accountedKeys=new Set([...nextKeys,...unresolvedKeys]);
+  const completeAccounting=accountedKeys.size===liveKeys.size&&[...liveKeys].every(k=>accountedKeys.has(k))&&[...nextKeys].every(k=>!unresolvedKeys.has(k));
+  // A confirmed move into a disconnected region may expose previously unreachable nests.
+  // Accept only complete accounting; preserve the old tail on malformed partial responses.
+  const enteredNewRegion=completeAccounting&&navUnreachable.some(k=>nextKeys.has(k));
+  if(!navPath.length&&out.status==='unavailable')navUnreachable=(out.unreachable||[]).filter(k=>liveKeys.has(k));
+  if(out.status!=='ok'||!out.path?.length||!completeAccounting||(losesRemainder&&!enteredNewRegion))throw Error(out.reason||'路线暂不可用');
   navPending=false;navRetryAt=0;navOrigin=position;routeFollower.set(out.path,position,Date.now());
   if(result?.position)routeFollower.observe(result.position,Date.now());navPath=routeFollower.remaining();navStops=out.stops||[];navUnreachable=out.unreachable||[];
-  navMessage=out.status==='ok'?(out.exact?'底图最短遍历路线':'底图优化遍历路线'):out.reason;
+  navMessage=navUnreachable.length?'部分目标参考路线':out.exact?'底图最短遍历路线':'底图优化遍历路线';
   navTarget=out.status==='ok'?targets.find(p=>NavigatorTools.pointKey(p)===out.target)||null:null;
  }catch(e){if(token===navRequest&&run===generation&&map===current?.id){navPending=true;navRetryAt=Date.now()+5000;navMessage=navPath.length?'新路线暂不可用，保留原路线并自动重试':'路线暂不可用，将自动重试';}}
  finally{clearTimeout(timeout);if(navController===controller)navController=null;navBusy=false;draw();}
 }
 function renderNavigation(){
  const data=current?journal.map(current.id):{picked:new Map()},picked=data.picked.size;
- const selected=selectedPoint?.map===current?.id?selectedPoint.point:navTarget;
+ const selected=selectedPoint&&selectedPoint.map===current?.id?selectedPoint.point:navTarget;
  const eligible=selected&&!journal.picked(current?.id,selected);
  $('nav-pick').disabled=!eligible;$('nav-undo').disabled=!picked;
  writeText('nav-selected',selected?t('选中点位')+': '+pointName(selected):t('点击地图点位可标记已拾取'));
  const held=result?.held||!result?.position||result.id!==current?.id;
- let message=!navEnabled?'开启后规划全部蛋巢路线':!current?.id.startsWith('sanctum-')?'参考路线暂仅支持地宫':held?'定位未确认，路线暂停':navMessage||'等待当前位置';
+ let message=!navEnabled?'开启后规划所选目标路线':!current?.id.startsWith('sanctum-')?'参考路线暂仅支持地宫':held?'定位未确认，路线暂停':navMessage||'等待当前位置';
  if(navEnabled&&!held&&navTarget&&Math.hypot(navTarget.x-result.position[0],navTarget.y-result.position[1])<30)message='已接近目标，请自行确认拾取';
- writeText('nav-status',t(message));writeText('nav-target',t('路线覆盖蛋巢')+' '+navStops.length+' / '+selectableTargets().length+(navUnreachable.length?' · '+t('无法确认连通')+' '+navUnreachable.length:''));
+ const unresolved=unresolvedNestPositions().length;
+ if(navEnabled&&unresolved)message+=' · '+t('仍有未覆盖目标，请查看黄色问号')+' '+unresolved;
+ writeText('nav-status',t(message));writeText('nav-target',t('路线覆盖目标')+' '+navStops.length+' / '+selectableTargets().length+(unresolved?' · '+t('无法确认连通')+' '+unresolved:''));
  writeText('nav-count',t('本图已完成')+' '+picked);
 }
 function navigationLayer(project=p=>p){
  if(!current||result?.id!==current.id)return {trail:[],path:[],target:null,stops:[],held:true};
  const trail=$('trail-enabled').checked?journal.map(current.id).trail.map(p=>p?project(p):null):[];
- return {trail,stops:navEnabled?navStops.map(s=>project(s.position)):[],path:navEnabled?navPath.map(project):[],target:navEnabled&&navTarget?project([navTarget.x,navTarget.y]):null,held:!!result.held};
+ return {trail,stops:navEnabled?navStops.map(s=>project(s.position)):[],unreachable:navEnabled?unresolvedNestPositions().map(project):[],path:navEnabled?navPath.map(project):[],target:navEnabled&&navTarget?project([navTarget.x,navTarget.y]):null,held:!!result.held};
 }
 function paintNavigation(context,z){
  const layer=navigationLayer();context.save();context.lineCap='round';context.lineJoin='round';
@@ -81,13 +94,14 @@ function paintNavigation(context,z){
  for(const p of layer.trail){if(!p){next=true;continue;}if(next){context.moveTo(...p);context.lineTo(p[0]+.01,p[1]);next=false;}else context.lineTo(...p);}context.stroke();
  context.font=`bold ${11/z}px sans-serif`;context.textAlign='center';context.textBaseline='middle';
  layer.stops.forEach((p,i)=>{const x=p[0]+12/z,y=p[1]-12/z;context.fillStyle='#ba252f';context.beginPath();context.arc(x,y,8/z,0,Math.PI*2);context.fill();context.fillStyle='#fff';context.fillText(String(i+1),x,y);});
+ (layer.unreachable||[]).forEach(p=>{context.strokeStyle='#ffcd48';context.lineWidth=3/z;context.beginPath();context.arc(p[0],p[1],17/z,0,Math.PI*2);context.stroke();const x=p[0]+15/z,y=p[1]-15/z;context.fillStyle='#ffcd48';context.beginPath();context.arc(x,y,9/z,0,Math.PI*2);context.fill();context.fillStyle='#302300';context.fillText('?',x,y);});
 
  context.restore();
 }
 function choosePoint(point){selectedPoint={map:current.id,point};renderNavigation();}
 $('route-enabled').onchange=()=>{navEnabled=$('route-enabled').checked;clearRoute();draw();if(navEnabled)updateRoute(true);};
 $('nav-next').onclick=()=>{navEnabled=true;$('route-enabled').checked=true;selectedPoint=null;refreshRoute();};
-$('nav-pick').onclick=()=>{const p=selectedPoint?.map===current?.id?selectedPoint.point:navTarget;if(!p||!current)return;journal.pick(current.id,p);selectedPoint=null;refreshRoute();};
+$('nav-pick').onclick=()=>{const p=selectedPoint&&selectedPoint.map===current?.id?selectedPoint.point:navTarget;if(!p||!current)return;journal.pick(current.id,p);selectedPoint=null;refreshRoute();};
 $('nav-undo').onclick=()=>{if(current)journal.undo(current.id);refreshRoute();};
 $('trail-enabled').onchange=()=>{draw();publishOverlay(true);};
 $('hide-picked').onchange=()=>{draw();publishOverlay(true);};
@@ -394,13 +408,21 @@ function uniqueMapPoints(points){
  }
  return unique;
 }
-function drawMarker(p,style,ctx,zoom,markerScale=1){if(style.point){ctx.save();if(current&&journal.picked(current.id,p))ctx.globalAlpha=.28;drawOriginalPoint(p,style,ctx,zoom,markerScale);ctx.restore();return;}const {color}=style;const size=style.size*1.4*markerScale;ctx.save();ctx.translate(p.x,p.y);ctx.scale(1/zoom,1/zoom);ctx.shadowColor='#0009';ctx.shadowBlur=3;ctx.fillStyle='#101b25b8';ctx.strokeStyle=color;ctx.lineWidth=1.15;ctx.beginPath();ctx.arc(0,0,size/2,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;const s=(size-5)/24;ctx.scale(s,s);ctx.translate(-12,-12);ctx.lineWidth=1.9;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(iconPaths[style.icon]);ctx.restore();if(style.label){ctx.save();ctx.font=`600 ${11*Math.max(.75,markerScale)/zoom}px sans-serif`;ctx.lineWidth=3/zoom;ctx.strokeStyle='#0b141e';ctx.strokeText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.fillStyle=color;ctx.fillText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.restore();}}
+// Keep coordinates for routing/pickup; separate overlapping nest/key artwork only.
+function markerPosition(p,z,scale=1){
+ if(p.category!=='egg-nests'||!current)return p;
+ const keys=current.keyRooms||(current.displayPoints||current.points).filter(q=>q.category.startsWith('key-rooms-'));
+ const overlap=keys.some(q=>enabled.has(q.category)&&!($('hide-picked').checked&&journal.picked(current.id,q))&&Math.hypot(q.x-p.x,q.y-p.y)<18);
+ return overlap?{...p,x:p.x+26*scale/z,y:p.y+12*scale/z}:p;
+}
+function drawMarker(p,style,ctx,zoom,markerScale=1){if(style.point){ctx.save();if(current&&journal.picked(current.id,p))ctx.globalAlpha=.28;const placed=markerPosition(p,zoom,markerScale);if(placed!==p){ctx.strokeStyle='#ffe9b099';ctx.lineWidth=1/zoom;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(placed.x,placed.y);ctx.stroke();}drawOriginalPoint(placed,style,ctx,zoom,markerScale);ctx.restore();return;}const {color}=style;const size=style.size*1.4*markerScale;ctx.save();ctx.translate(p.x,p.y);ctx.scale(1/zoom,1/zoom);ctx.shadowColor='#0009';ctx.shadowBlur=3;ctx.fillStyle='#101b25b8';ctx.strokeStyle=color;ctx.lineWidth=1.15;ctx.beginPath();ctx.arc(0,0,size/2,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;const s=(size-5)/24;ctx.scale(s,s);ctx.translate(-12,-12);ctx.lineWidth=1.9;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(iconPaths[style.icon]);ctx.restore();if(style.label){ctx.save();ctx.font=`600 ${11*Math.max(.75,markerScale)/zoom}px sans-serif`;ctx.lineWidth=3/zoom;ctx.strokeStyle='#0b141e';ctx.strokeText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.fillStyle=color;ctx.fillText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.restore();}}
 function newRun(){confirmedMapId=null;resetNavigation();lastFullFrameAt=-Infinity;resetLoot();seaView='auto';$('sea-region').value='auto';history=[];lastSignature=null;result=null;tracking=null;lastKnown=null;trackedAt=0;generation++;$('position-status').textContent='先开大地图校准，再用小地图追踪';$('result').textContent='新一局 · 等待主门附近地图';$('reason').textContent='从黄门进入后打开地图，探索更多房间以缩小候选。';$('candidates').replaceChildren();draw();}
 function notice(text){$('reason').textContent=text;}
 async function loadMap(id){
  const requestVersion=++mapLoadVersion;if(current?.id!==id){clearRoute();selectedPoint=null;}
  const d=await fetch('/data/'+id+'.json',{cache:'no-store'}).then(r=>r.json());
- const im=new Image();im.src=d.image;await im.decode();if(requestVersion!==mapLoadVersion)return;current=d;current.displayPoints=uniqueMapPoints(d.points);bitmap=im;
+ const im=new Image();im.src=d.image;await im.decode();if(requestVersion!==mapLoadVersion)return;current=d;current.displayPoints=uniqueMapPoints(d.points);current.keyRooms=current.displayPoints.filter(p=>p.category.startsWith('key-rooms-'));bitmap=im;
+ if(typeof RouteGoals!=='undefined')RouteGoals.render();if(typeof MapNotes!=='undefined')MapNotes.syncMap();
  const measure=document.createElement('canvas');measure.width=256;measure.height=256;const mc=measure.getContext('2d');mc.drawImage(im,0,0,256,256);const pixels=mc.getImageData(0,0,256,256).data;let left=256,top=256,right=0,bottom=0;for(let y=0;y<256;y++)for(let x=0;x<256;x++){const i=(y*256+x)*4;if((pixels[i]+pixels[i+1]+pixels[i+2])/3>85){left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}}mapBounds=right>left?{x:Math.max(0,left-8)*d.width/256,y:Math.max(0,top-8)*d.height/256,w:Math.min(256,right-left+16)*d.width/256,h:Math.min(256,bottom-top+16)*d.height/256}:{x:0,y:0,w:d.width,h:d.height};
  enabled=new Set(d.categories.filter(c=>pointVisibility.has(c.id)?pointVisibility.get(c.id):/egg|entrance|legendary|key-room|sanctums|teleporters|extraction|timed-challenges/.test(c.id)).map(c=>c.id));
  loadMapCreatures(current).then(()=>{if(current===d){draw();publishOverlay(true);}});
@@ -442,12 +464,12 @@ function draw(){
  const baseKey=mapContentKey()+JSON.stringify([w,h,dpr,zoom,ox,oy]);
  if(webBaseKey!==baseKey){webBase.width=canvas.width;webBase.height=canvas.height;const baseContext=webBase.getContext('2d');baseContext.setTransform(dpr,0,0,dpr,0,0);paintMap(baseContext,zoom,ox,oy,1,false);webBaseKey=baseKey;}
  ctx.drawImage(webBase,0,0,webBase.width,webBase.height,0,0,w,h);
- ctx.save();ctx.translate(ox,oy);ctx.scale(zoom,zoom);const activeCrop=regionBounds();if(activeCrop){ctx.beginPath();ctx.rect(activeCrop.x,activeCrop.y,activeCrop.w,activeCrop.h);ctx.clip();}paintNavigation(ctx,zoom);paintPlayer(ctx,zoom);ctx.restore();$('viewmode').textContent=isSea()?(activeSeaRegion&&seaView!=='all'?activeSeaRegion.name+' · 分区地图':'全岛总览'):(result&&result.id===current.id?(result.held?'保留上次位置':'匹配范围'):'全图浏览');
+ ctx.save();ctx.translate(ox,oy);ctx.scale(zoom,zoom);const activeCrop=regionBounds();if(activeCrop){ctx.beginPath();ctx.rect(activeCrop.x,activeCrop.y,activeCrop.w,activeCrop.h);ctx.clip();}paintNavigation(ctx,zoom);paintPlayer(ctx,zoom);if(typeof MapNotes!=='undefined')MapNotes.paint(ctx,zoom);ctx.restore();$('viewmode').textContent=isSea()?(activeSeaRegion&&seaView!=='all'?activeSeaRegion.name+' · 分区地图':'全岛总览'):(result&&result.id===current.id?(result.held?'保留上次位置':'匹配范围'):'全图浏览');
  publishOverlay();updateRoute();
 }
-let drag=null;canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,ox,oy};canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(drag){ox=drag.ox+e.clientX-drag.x;oy=drag.oy+e.clientY-drag.y;draw();}};canvas.onpointerup=e=>{if(drag&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<5&&current){const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left-ox)/zoom,y=(e.clientY-r.top-oy)/zoom;const near=(current.displayPoints||current.points).filter(p=>enabled.has(p.category)&&(!$('hide-picked').checked||!journal.picked(current.id,p))&&Math.hypot(p.x-x,p.y-y)<20/zoom);if(near.length)choosePoint(near.sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y))[0]);$('tooltip').textContent=[...new Set(near.map(p=>pointName(p)))].join(' / ');$('tooltip').style.display=near.length?'block':'none';}drag=null;};canvas.onwheel=e=>{e.preventDefault();const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const z=Math.max(.08,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));ox=x-(x-ox)*z/zoom;oy=y-(y-oy)*z/zoom;zoom=z;draw();};
+let drag=null;canvas.onpointerdown=e=>{if(e.button!==0)return;drag={x:e.clientX,y:e.clientY,ox,oy};canvas.setPointerCapture(e.pointerId);};canvas.onpointermove=e=>{if(drag){ox=drag.ox+e.clientX-drag.x;oy=drag.oy+e.clientY-drag.y;draw();}};canvas.onpointerup=e=>{if(drag&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<5&&current){const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left-ox)/zoom,y=(e.clientY-r.top-oy)/zoom;const near=(current.displayPoints||current.points).filter(p=>enabled.has(p.category)&&(!$('hide-picked').checked||!journal.picked(current.id,p))&&Math.hypot(markerPosition(p,zoom,pointIconScale).x-x,markerPosition(p,zoom,pointIconScale).y-y)<20/zoom);if(near.length)choosePoint(near.sort((a,b)=>Math.hypot(markerPosition(a,zoom,pointIconScale).x-x,markerPosition(a,zoom,pointIconScale).y-y)-Math.hypot(markerPosition(b,zoom,pointIconScale).x-x,markerPosition(b,zoom,pointIconScale).y-y))[0]);$('tooltip').textContent=[...new Set(near.map(p=>pointName(p)))].join(' / ');$('tooltip').style.display=near.length?'block':'none';}drag=null;};canvas.onwheel=e=>{e.preventDefault();const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const z=Math.max(.08,Math.min(8,zoom*Math.exp(-e.deltaY*.001)));ox=x-(x-ox)*z/zoom;oy=y-(y-oy)*z/zoom;zoom=z;draw();};
 new ResizeObserver(()=>fit()).observe($('mapwrap'));
-function preview(){if(!frame)return;const w=frame.videoWidth||frame.width,h=frame.videoHeight||frame.height,s=Math.min(1,800/Math.max(w,h));const pw=Math.round(w*s),ph=Math.round(h*s);if(cap.width!==pw||cap.height!==ph){cap.width=pw;cap.height=ph;}cc.clearRect(0,0,cap.width,cap.height);cc.drawImage(frame,0,0,cap.width,cap.height);$('empty').hidden=true;}
+function preview(){if(!frame)return;const w=frame.videoWidth||frame.width,h=frame.videoHeight||frame.height,s=Math.min(1,800/Math.max(w,h));const pw=Math.round(w*s),ph=Math.round(h*s);if(cap.width!==pw||cap.height!==ph){cap.width=pw;cap.height=ph;}cc.clearRect(0,0,cap.width,cap.height);cc.drawImage(frame,0,0,cap.width,cap.height);previewFrameAt=Date.now();$('empty').hidden=true;}
 $('newrun').onclick=newRun;
 async function importFile(file){if(!file||!file.type.startsWith('image/'))return;stop();const im=await createImageBitmap(file);frame=im;cap.width=im.width;cap.height=im.height;newRun();$('capture-status').textContent='截图模式';preview();await identify();}
 $('file').onchange=e=>importFile(e.target.files[0]).catch(e=>notice(e.message));document.onpaste=e=>{const f=[...e.clipboardData.items].find(i=>i.type.startsWith('image/'));if(f)importFile(f.getAsFile()).catch(e=>notice(e.message));};
@@ -488,7 +510,8 @@ async function nativeRequest(payload){
 async function listNativeWindows(){
  $('native-connect').disabled=true;$('native-help').textContent='正在读取可用窗口…';
  try{const out=await nativeRequest({action:'list'});$('native-window').replaceChildren();
-  for(const item of out.windows){const option=document.createElement('option');option.value=item.id;option.textContent=item.title+' · '+item.pid;$('native-window').append(option);}
+  const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='请选择游戏窗口';placeholder.disabled=true;placeholder.selected=true;$('native-window').append(placeholder);
+  for(const item of out.windows){const option=document.createElement('option');option.value=item.id;option.dataset.pid=String(item.pid);option.textContent=item.title+' · '+item.pid;$('native-window').append(option);}
   $('native-connect').disabled=!out.windows.length;$('native-help').textContent=out.windows.length?'请选择伊莫游戏窗口。仅在本机读取，停止后立即结束采集。':'没有可用窗口，请先打开游戏。';
  }catch(e){$('native-help').textContent=e.message;}
 }
@@ -496,9 +519,10 @@ $('native-start').onclick=()=>{$('native-dialog').showModal();listNativeWindows(
 $('native-refresh').onclick=listNativeWindows;
 $('native-cancel').onclick=()=>$('native-dialog').close();
 $('native-connect').onclick=async()=>{
- const windowId=$('native-window').value;if(!windowId)return;
+ const windowId=$('native-window').value;if(!windowId){$('native-help').textContent='请先选择游戏窗口。';return;}
+ const windowPid=Number($('native-window').selectedOptions[0]?.dataset.pid);
  $('native-dialog').close();stop();const epoch=captureEpoch;$('native-start').disabled=true;$('stop').disabled=false;captureMessage('正在连接本地采集…');
- try{const out=await nativeRequest({action:'start',window:windowId,interval:captureInterval()});
+ try{const out=await nativeRequest({action:'start',window:windowId,window_pid:windowPid,interval:captureInterval()});
   if(epoch!==captureEpoch){nativeRequest({action:'stop',session:out.session}).catch(()=>{});return;}
   nativeSession=out.session;nativeRetryAfter=0;nativeSequence=0;nativePreviewAt=-Infinity;receivedCaptureFrame=false;firstFrameDeadline=performance.now()+12000;
   running=true;newRun();notice(out.capture_mode==='compatible'?'本地采集已连接（兼容模式），请打开游戏大地图校准。':'本地采集已连接，请打开游戏大地图校准。');tick(epoch);
@@ -567,7 +591,7 @@ async function identify(forceFull=false){
  if(out.native_capture){
   const meta=out.native_capture;nativeCost=Number(meta.processing_ms)||0;nativeSequence=meta.sequence;currentCaptureAt=meta.captured_at;sig=meta.signature;
   receivedCaptureFrame=true;$('capture-status').textContent='本地采集中';
-  if(meta.preview){const im=new Image();im.src=meta.preview;await im.decode();if(g!==generation)return;cap.width=im.width;cap.height=im.height;cc.drawImage(im,0,0);$('empty').hidden=true;}
+  if(meta.preview){const im=new Image();im.src=meta.preview;await im.decode();if(g!==generation)return;cap.width=im.width;cap.height=im.height;cc.drawImage(im,0,0);previewFrameAt=Date.now();$('empty').hidden=true;}
  }
  if(out.requires_full_frame){
    ({payload,sig}=capturePayload(true));out=await requestMatch(payload);if(g!==generation)return;
@@ -623,7 +647,7 @@ function decorateButtons(){for(const [id,name]of Object.entries(buttonIcons)){co
 decorateButtons();for(const id of Object.keys(buttonIcons))new MutationObserver(decorateButtons).observe($(id),{childList:true});document.querySelector('.brand>b').replaceChildren(icon('compass'));document.querySelector('#empty>span').replaceChildren(icon('monitor'));
 
 function pointName(point){
- if(I18N.language!=='en')return point.name;
+ if(I18N.language!=='en')return point.name+(point.note?' · '+point.note:'');
  const translated=t(point.name);
  if(!/[\u3400-\u9fff]/.test(translated))return translated;
  // Unknown proper names retain their source spelling after an English category.

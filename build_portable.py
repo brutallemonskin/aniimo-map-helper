@@ -12,11 +12,11 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parent
 SOURCE_RUNTIME=Path(sys.executable).parent
-OUTPUT=ROOT/'portable'/'aniimo_map_helper_v0.4.2'
+OUTPUT=ROOT/'portable'/'aniimo_map_helper_v0.4.3'
 if OUTPUT.exists(): raise SystemExit('Output exists; choose a new version before rebuilding.')
 APP=OUTPUT/'app'; RUNTIME=OUTPUT/'runtime'
 APP.mkdir(parents=True); (RUNTIME/'Lib/site-packages').mkdir(parents=True)
-for name in ('hotkeys.py','hotkey-settings.js','native_capture.py','capture_process.py','server.py','image_io.py','matcher.py','loot_detector.py','door_matcher.py','player.py','minimap.py','relocalizer.py','route_planner.py','overlay_bridge.py','overlay_window.py','index.html','app.js','assist.js','i18n.js','style.css'):
+for name in ('field_notes.py','field-notes.js','route-goals.js','hotkeys.py','hotkey-settings.js','native_capture.py','capture_process.py','server.py','image_io.py','matcher.py','loot_detector.py','door_matcher.py','player.py','minimap.py','relocalizer.py','route_planner.py','overlay_bridge.py','overlay_window.py','index.html','app.js','assist.js','i18n.js','style.css'):
     shutil.copy2(ROOT/name,APP/name)
 (APP/'data').mkdir()
 catalog=json.loads((ROOT/'data/catalog.json').read_text(encoding='utf-8'))
@@ -53,20 +53,20 @@ for output,defines in [('启动助手.exe',[]),('退出助手.exe',['/define:STO
     subprocess.run([str(compiler),'/nologo','/target:winexe','/reference:System.Windows.Forms.dll','/reference:System.Management.dll','/out:'+str(OUTPUT/output),*defines,str(ROOT/'portable_launcher.cs'),str(ROOT/'exit_all.cs')],check=True)
 DIAGNOSTICS=OUTPUT/'diagnostics'
 (DIAGNOSTICS/'upstream/windows_capture').mkdir(parents=True)
-for name in ('run_diagnostics.py','说明.txt'):
+for name in ('run_diagnostics.py','environment.ps1','说明.txt'):
     shutil.copy2(ROOT/'diagnostics'/name,DIAGNOSTICS/name)
 for name in ('__init__.py','windows_capture.pyd'):
     shutil.copy2(ROOT/'diagnostics/upstream/windows_capture'/name,DIAGNOSTICS/'upstream/windows_capture'/name)
 shutil.copy2(ROOT/'diagnostics/upstream/LICENCE',DIAGNOSTICS/'upstream/LICENCE')
 for source,target,extra in [('Fixture.cs',DIAGNOSTICS/'Fixture.exe',['/target:winexe','/r:System.Windows.Forms.dll','/r:System.Drawing.dll']),
-                            ('ItemProbe.cs',DIAGNOSTICS/'ItemProbe.exe',['/target:exe']),
+                            ('ItemProbe.cs',DIAGNOSTICS/'ItemProbe.exe',['/target:exe','/r:System.Windows.Forms.dll']),
                             ('Launcher.cs',OUTPUT/'采集兼容性诊断.exe',['/target:exe'])]:
     subprocess.run([str(compiler),'/nologo','/platform:x64','/out:'+str(target),*extra,str(ROOT/'diagnostics'/source)],check=True)
 shutil.copy2(ROOT/'更新说明.txt',OUTPUT/'更新说明.txt')
-(OUTPUT/'使用说明.txt').write_text('''伊莫 · 地宫领航 便携版 v0.4.2（Windows 10/11 x64）
+(OUTPUT/'使用说明.txt').write_text('''伊莫 · 地宫领航 便携版 v0.4.3（Windows 10/11 x64）
 
 启动时若有其他版本正在运行，会询问是否切换；同意后需重新选择游戏窗口。
-新增彩虹光柱精度改进、WGC HRESULT 诊断、有限通信重试及旧系统提示。详见根目录“更新说明.txt”。
+新增路线目标选择、地图纠错与实测记录、失落地宫 35 局部通道修正、采集目标核对及扩展 WGC 诊断。详见根目录“更新说明.txt”。
 采集失败时可双击“采集兼容性诊断.exe”，结果保存在“诊断报告”中；无需游戏或管理员权限。
 首次打开默认中文。可在右上角切换 English，手动选择的语言偏好自动保存。
 
@@ -85,10 +85,12 @@ shutil.copy2(ROOT/'更新说明.txt',OUTPUT/'更新说明.txt')
 跑图时优先读取小地图，打开大地图时自动恢复完整画面识别；约每 5 秒随识别周期核对完整画面。彩虹掉落检测使用最长边 800 像素的场景预览。无需额外设置，本地采集仍读取完整游戏窗口。
 识别与同步改进：补强主门入口识别；小地图失去位置后尝试重新搜索，连续确认后恢复；地图底图缓存，人物位置单独更新。不能确认时仍保留上次位置。
 新功能：
+在主页面地图右键，或点“＋记录地图”后选位置，可记录点位、通路、怪物和本次刷新。通路需再选终点。玩家记录显示为青色编号标记，可点击修改、删除。新一局、刷新与重启保留；未核实记录不修改官方点位或路线，也不显示在悬浮窗。
+记录保存在 app/user-data/map-notes/。导出 ZIP 包含带标记的地图 PNG、TXT、JSON 和主动附上的截图。截图只在主动点击附上时保存；换新解压目录请自行保留旧 user-data 文件夹。
 悬浮窗补上拖动、缩放中断后的鼠标捕获释放，以及松键检查、隐藏和关闭时的释放保护；通过模拟消息回归，Alt+Tab / Windows 键反馈仍需原反馈设备复测。
 海岛仅保留普通抢蛋模式，不再提供小队海岛选择。识别间隔默认 0.5 秒；旧自动性能偏好首次更新时迁移到 0.5 秒，其他手动间隔保留。仍可手动选择“自动性能”，按近期处理耗时调整，并在确认静止后降低频率；手动设置保留。该档估算处理负担，不直接读取 CPU 占用率。
 位置状态明确区分确认、保留、重新定位和关闭，并显示距上次确认的时间。
-跑图辅助改为蛋巢遍历：点击“规划 / 重新规划路线”，从当前位置出发遍历全部未完成蛋巢，不必返回起点。红色路线和编号表示顺序，深蓝色记录已走轨迹。隐藏图标不影响规划；标记拾取后重算剩余路线，沿路线移动仅消退走完的红线，保留深蓝轨迹；连续多次确认明显偏航后自动重新规划，自动重算至少间隔 10 秒。背包遮挡或定位跳变不会直接抹掉未观察路段。当前地图库使用精确最短顺序计算，最优性仅针对可连通的底图网格；无法确认通道的蛋巢单独提示，不画穿墙连线。
+跑图辅助可选蛋巢、金箱、蛋巢＋金箱或自选目标（含商人与侧门）。点击“规划 / 重新规划路线”，从当前位置出发遍历所选未完成目标，不必返回起点。红色路线和编号表示顺序，深蓝色记录已走轨迹。隐藏图标不影响规划；标记拾取后重算剩余路线，沿路线移动仅消退走完的红线，保留深蓝轨迹；连续多次确认明显偏航后自动重新规划，自动重算至少间隔 10 秒。背包遮挡或定位跳变不会直接抹掉未观察路段。12 个以内可达目标使用精确顺序计算，更多目标使用启发式优化，不保证全局最短；无法确认连通的目标单独提示，不画穿墙连线。
 参考路线仅按底图通道计算，无法确认连通时不画路线；门锁、高低差、机关仍需游戏内核对。海岛暂不提供参考路线。
 “标记已拾取”由玩家手动确认，可撤销；不会因为经过附近自动标记。默认隐藏完成点位，网页与悬浮窗同步。
 深蓝色轨迹显示已确认位置附近，最多保留最近 600 个轨迹点，不代表游戏全部探索范围。定位丢失时不延伸，恢复后不跨越未知段连线。
