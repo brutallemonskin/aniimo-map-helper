@@ -12,15 +12,16 @@ const NavigatorTools=(()=>{
  const captureFps=interval=>Math.max(1,Math.min(8,2000/Math.max(250,interval)));
  class AdaptiveCadence {
   constructor(){this.reset();}
-  reset(){this.cost=0;this.anchor=null;this.movedAt=0;this.interval=500;}
+  reset(){this.cost=0;this.latest=0;this.anchor=null;this.movedAt=0;this.interval=500;}
   observe(elapsed,position,map,now){
-   if(Number.isFinite(elapsed)&&elapsed>=0)this.cost=this.cost?this.cost*.75+elapsed*.25:elapsed;
+   if(Number.isFinite(elapsed)&&elapsed>=0){this.latest=elapsed;this.cost=this.cost?this.cost*.75+elapsed*.25:elapsed;}
    if(position){
     if(!this.anchor||this.anchor.map!==map||Math.hypot(position[0]-this.anchor.p[0],position[1]-this.anchor.p[1])>=5){this.anchor={map,p:[...position]};this.movedAt=now;}
    }else this.anchor=null;
    const idle=position&&now-this.movedAt>=4000;
    const desired=Math.max(this.cost/0.35,position?(idle?1000:250):1500);
-   this.interval=[250,500,1000,2000,3000].find(v=>v>=desired)||3000;
+   // 自动档最长间隔为一秒；手动选择仍由页面保留。
+   this.interval=[250,500,1000].find(v=>v>=desired)||1000;
    return this.interval;
   }
  }

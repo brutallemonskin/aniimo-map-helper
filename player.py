@@ -3,11 +3,59 @@ from image_io import read_image, normalize_map_lighting
 import cv2
 import numpy as np
 from pathlib import Path
+from masked_correlation import MaskedCorrelation
+from recognition_timing import stage
 
 try:
     _egg=read_image(str(Path(__file__).resolve().parent/'data/player-egg-template.png'),cv2.IMREAD_GRAYSCALE)
 except ValueError:
     _egg=None  # The index builder reports the missing asset through /api/status.
+
+_number_labels={}
+for _slot in (1,2,3):
+    try:
+        _number_labels[_slot]=read_image(Path(__file__).resolve().parent/f'data/player-number-{_slot}-template.png',cv2.IMREAD_GRAYSCALE)
+    except ValueError:
+        pass
+
+
+def _glyph_score(region,template):
+    normalized=cv2.resize(region,(template.shape[1],template.shape[0]),interpolation=cv2.INTER_AREA)
+    score=float(cv2.matchTemplate(normalized,template,cv2.TM_CCOEFF_NORMED)[0,0])
+    for interpolation in (cv2.INTER_NEAREST,cv2.INTER_AREA):
+        resized=cv2.resize(template,(region.shape[1],region.shape[0]),interpolation=interpolation)
+        for threshold in (64,127):
+            binary=np.uint8(resized>threshold)*255
+            score=max(score,float(cv2.matchTemplate(region,binary,cv2.TM_CCOEFF_NORMED)[0,0]))
+    return score
+
+
+def find_team_labels(hsv):
+    """识别编号而非身份：颜色只用于提取字形，自己的编号由本局设置指定。"""
+    h,w=hsv.shape[:2];found=[]
+    for low,high,saturation,brightness in ((22,40,90,180),(41,85,65,150),(86,135,65,150)):
+        mask=cv2.inRange(hsv,(low,saturation,brightness),(high,255,255))
+        _,_,stats,_=cv2.connectedComponentsWithStats(mask)
+        glyphs=[]
+        for s in stats[1:]:
+            x,y,bw,bh,area=map(int,s)
+            if max(8,h*.008)<=bh<=max(60,h*.05) and .18<=bw/bh<=1.1 and .35<=area/(bw*bh)<=.95:
+                glyphs.append((x,y,bw,bh))
+        glyphs.sort()
+        for index,(x,y,bw,bh) in enumerate(glyphs):
+            for px,py,pw,ph in glyphs[index+1:]:
+                gap=px-(x+bw)
+                if gap>bh*.55:break
+                if not (gap>=0 and .8<=ph/bh<=1.25 and abs(py-y)<=bh*.2 and .45<=pw/ph<=1.1):continue
+                y0=min(y,py);y1=max(y+bh,py+ph);x1=px+pw
+                region=mask[y0:y1,x:x1]
+                fits=sorted(((_glyph_score(region,template),slot) for slot,template in _number_labels.items()
+                             if (slot==1 and bw/bh<=.6) or (slot!=1 and bw/bh>=.48)),reverse=True)
+                if not fits or fits[0][0]<.82 or (len(fits)>1 and fits[0][0]-fits[1][0]<.05):continue
+                point=[(x+x1)/2,(y0+y1)/2];slot=fits[0][1]
+                found.append({'point':point,'normalized':[point[0]/w,point[1]/h],
+                              'box':[x,y0,x1-x,y1-y0],'kind':'team-label','label':f'{slot}P','slot':slot})
+    return found
 
 def detect_egg(image):
     if _egg is None:return None
@@ -44,9 +92,10 @@ def detect_egg(image):
         template=cv2.resize(_egg,(width,height))
         mask=np.zeros((height,width),np.uint8)
         cv2.ellipse(mask,(round(width*.43),round(height*.48)),(max(2,round(width*.34)),max(2,round(height*.42))),0,0,360,255,-1)
+        correlation=MaskedCorrelation(template,mask)
         for x0,y0,x1,y1 in regions:
             if x1-x0<width or y1-y0<height:continue
-            scores=cv2.matchTemplate(gray[y0:y1,x0:x1],template,cv2.TM_CCOEFF_NORMED,mask=mask)
+            scores=correlation.match(gray[y0:y1,x0:x1])
             scores=np.nan_to_num(scores,nan=-1,posinf=-1,neginf=-1)
             for _ in range(2):
                 _,score,_,(lx,ly)=cv2.minMaxLoc(scores)
@@ -61,14 +110,21 @@ def detect_egg(image):
     if score<.86 or any(score-other[0]<.06 for other in picks[1:] if np.linalg.norm(point-other[1])>max(box[2:])):return None
     return {'point':point.tolist(),'normalized':(point/[w,h]).tolist(),'box':box,'kind':'egg'}
 
-def detect_player(image):
+@stage('人物图标定位')
+def detect_player(image,player_slot=None):
     image=normalize_map_lighting(image)
-    egg=detect_egg(image)
-    if egg:return egg
     h,w=image.shape[:2]
     hsv=cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
     mask=cv2.inRange(hsv,(22,90,180),(40,255,255))
     n,labels,stats,centers=cv2.connectedComponentsWithStats(mask)
+    team=find_team_labels(hsv)
+    if player_slot is not None:
+        selected=[point for point in team if point['slot']==player_slot]
+        return selected[0] if len(selected)==1 else None
+    # 看到编号但尚未选择自己的编号时，不能把任意队员或蛋巢当作自己。
+    if team:return None
+    egg=detect_egg(image)
+    if egg:return egg
     candidates=[]
     for label,(s,c) in enumerate(zip(stats[1:],centers[1:]),1):
         x,y,bw,bh,area=s

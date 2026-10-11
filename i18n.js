@@ -1,6 +1,12 @@
 /* Presentation-only localization: map IDs, coordinates and matching stay unchanged. */
 const I18N = (() => {
  const pairs = {
+ '界面检查':'Menu check','地图搜索':'Map search','小地图追踪':'Minimap tracking','小地图检查':'Minimap check','找回位置':'Relocalization',
+ '本局我的编号':'My slot this round','未指定（普通箭头）':'Unspecified (normal arrow)',
+ '小队模式请选择自己的 1P／2P／3P，换队后重新核对。选择后打开大地图校准。':'In a squad, select your own 1P / 2P / 3P slot. Check it after changing teams, then open the large map to calibrate.',
+ '请打开大地图，按本局编号重新校准人物位置':'Open the large map to calibrate your selected player slot',
+ '只定位选定的队伍编号；换队或编号变化后请重新选择。':'Only the selected player slot is tracked. Select it again after changing teams or slots.',
+ '人物编号已更新，请重新校准。':'Player slot changed. Please recalibrate.',
  "玩家纠错":"Player correction","玩家实测":"Player observation","玩家纠错与实测":"Player corrections & observations","显示玩家纠错与实测点":"Show player corrections & observations","导出标注地图与记录 ZIP":"Export annotated maps & notes ZIP","玩家标记已保存在地图上；刷新和重启后仍保留。":"Player marker saved on the map; kept after reloads and restarts.","待保存":"Not saved",
  "地图已切换，请回到记录对应的地图再选择终点。":"Map changed. Return to the original map before choosing the endpoint.",
  "目标遍历路线":"Target tour route",
@@ -121,7 +127,7 @@ const I18N = (() => {
 "显示已走过路线":"Show traveled route",
 "从当前位置出发，遍历全部未完成蛋巢，不必返回起点。按红色编号依次前往；隐藏图标不影响规划。已走完的红线路段自动消退，深蓝轨迹保留；持续偏航后自动重算，避免频繁跳线。蛋巢仍需手动确认拾取。门锁、高低差和机关需游戏内核对。":"Visit all unfinished nests from your position without returning to the start. Follow the red numbers. Hidden markers are included. Traveled red segments fade; the blue trail stays. Sustained deviations replan with a cooldown. Confirm collection manually. Check locks, elevation and mechanisms in game.",
 "红色为规划路线，深蓝色为已走轨迹。轨迹只记录已确认的位置，不代表游戏迷雾已全部探索。最多保留最近 600 个轨迹点；本局标记在新一局、重新连接采集或刷新后清空。":"Red is the planned tour; deep blue is your confirmed trail, not all explored fog. Up to 600 recent points are retained. A new run, new capture or reload clears this session.",
- '自动性能':'Automatic performance','自动调节':'Adaptive interval','手动间隔':'Manual interval','最近处理耗时':'Recent processing time',
+ '自动性能':'Automatic performance','自动调节':'Adaptive interval','手动间隔':'Manual interval','最近处理耗时':'Recent processing time','本帧处理耗时':'Current processing time','近期平均':'Smoothed average',
  '定位已关闭':'Tracking off','位置已确认':'Position confirmed','正在重新定位':'Reacquiring position','等待地图校准':'Awaiting calibration',
  '仅根据已确认画面更新位置':'Updated from confirmed frames only','距上次确认':'Since last confirmation','打开游戏大地图以确认本局起点':'Open the game map to calibrate this run',
  '跑图辅助':'Expedition guide','下一目标与参考路线':'Next target and reference route','优先目标':'Target preference','宝箱与蛋巢':'Chests and egg nests','黄门与蓝门':'Yellow and blue doors',

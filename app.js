@@ -2,6 +2,8 @@ const $=id=>document.getElementById(id), cap=$('capture'), cc=cap.getContext('2d
 let catalog=[], current=null, bitmap=null, zoom=1, ox=0, oy=0, enabled=new Set(), result=null, mapBounds=null, mapLoadVersion=0;
 let frame=null, busy=false, timer=null, running=false, history=[], lastSignature=null, generation=0;
 let tracking=null, trackedAt=0, lastKnown=null, confirmedMapId=null;
+let playerSlot=null;
+let recognitionKind='';
 let lastFullFrameAt=-Infinity,previewFrameAt=0;
 let observationSession=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
 const cadence=new NavigatorTools.AdaptiveCadence(),journal=new NavigatorTools.RunJournal(),routeFollower=new NavigatorTools.RouteFollower();
@@ -9,14 +11,14 @@ let recoveryActive=false,navEnabled=false,navTarget=null,selectedPoint=null,navP
 let navPending=false,navRetryAt=0,navController=null;
 function writeText(id,value){const el=$(id);if(el.textContent!==value)el.textContent=value;}
 function effectiveInterval(){return $('interval').value==='auto'?cadence.interval:Number($('interval').value)||500;}
-function resetNavigation(){clearRoute();journal.reset();cadence.reset();selectedPoint=null;recoveryActive=false;}
+function resetNavigation(){clearRoute();journal.reset();cadence.reset();recognitionKind='';selectedPoint=null;recoveryActive=false;}
 function syncQuality(){
  const active=result?.position&&result.id===current?.id&&!result.held;
  const state=!realtimeTracking?'off':active?'tracking':lastKnown?(recoveryActive?'recovering':'held'):'uncalibrated';
  const labels={off:'定位已关闭',tracking:'位置已确认',held:'保留上次位置',recovering:'正在重新定位',uncalibrated:'等待地图校准'};
  const el=$('tracking-quality');writeText('tracking-quality',t(labels[state]));if(el.getAttribute?.('data-state')!==state)el.setAttribute('data-state',state);
  writeText('quality-detail',state==='tracking'?t('仅根据已确认画面更新位置'):lastKnown?t('距上次确认')+' '+Math.max(0,Math.floor((Date.now()-trackedAt)/1000))+' s':t('打开游戏大地图以确认本局起点'));
- writeText('performance-status',($('interval').value==='auto'?t('自动调节')+': '+(effectiveInterval()/1000)+' s · ':t('手动间隔')+' · ')+t('最近处理耗时')+' '+Math.round(cadence.cost)+' ms');
+ writeText('performance-status',(recognitionKind?t(recognitionKind)+' · ':'')+($('interval').value==='auto'?t('自动调节')+': '+(effectiveInterval()/1000)+' s · ':t('手动间隔')+' · ')+t('本帧处理耗时')+' '+Math.round(cadence.latest)+' ms · '+t('近期平均')+' '+Math.round(cadence.cost)+' ms');
 }
 function clearRoute(message=''){routeFollower.reset();navRequest++;navController?.abort();navPending=false;navRetryAt=0;navTarget=null;navPath=[];navStops=[];navUnreachable=[];navOrigin=null;navAt=0;navMessage=message;}
 function refreshRoute(){
@@ -416,7 +418,7 @@ function markerPosition(p,z,scale=1){
  return overlap?{...p,x:p.x+26*scale/z,y:p.y+12*scale/z}:p;
 }
 function drawMarker(p,style,ctx,zoom,markerScale=1){if(style.point){ctx.save();if(current&&journal.picked(current.id,p))ctx.globalAlpha=.28;const placed=markerPosition(p,zoom,markerScale);if(placed!==p){ctx.strokeStyle='#ffe9b099';ctx.lineWidth=1/zoom;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(placed.x,placed.y);ctx.stroke();}drawOriginalPoint(placed,style,ctx,zoom,markerScale);ctx.restore();return;}const {color}=style;const size=style.size*1.4*markerScale;ctx.save();ctx.translate(p.x,p.y);ctx.scale(1/zoom,1/zoom);ctx.shadowColor='#0009';ctx.shadowBlur=3;ctx.fillStyle='#101b25b8';ctx.strokeStyle=color;ctx.lineWidth=1.15;ctx.beginPath();ctx.arc(0,0,size/2,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;const s=(size-5)/24;ctx.scale(s,s);ctx.translate(-12,-12);ctx.lineWidth=1.9;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(iconPaths[style.icon]);ctx.restore();if(style.label){ctx.save();ctx.font=`600 ${11*Math.max(.75,markerScale)/zoom}px sans-serif`;ctx.lineWidth=3/zoom;ctx.strokeStyle='#0b141e';ctx.strokeText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.fillStyle=color;ctx.fillText(t(style.label),p.x+(size/2+5)/zoom,p.y+4/zoom);ctx.restore();}}
-function newRun(){confirmedMapId=null;resetNavigation();lastFullFrameAt=-Infinity;resetLoot();seaView='auto';$('sea-region').value='auto';history=[];lastSignature=null;result=null;tracking=null;lastKnown=null;trackedAt=0;generation++;$('position-status').textContent='先开大地图校准，再用小地图追踪';$('result').textContent='新一局 · 等待主门附近地图';$('reason').textContent='从黄门进入后打开地图，探索更多房间以缩小候选。';$('candidates').replaceChildren();draw();}
+function newRun(){playerSlot=null;$('player-slot').value='';confirmedMapId=null;resetNavigation();lastFullFrameAt=-Infinity;resetLoot();seaView='auto';$('sea-region').value='auto';history=[];lastSignature=null;result=null;tracking=null;lastKnown=null;trackedAt=0;generation++;$('position-status').textContent='先开大地图校准，再用小地图追踪';$('result').textContent='新一局 · 等待主门附近地图';$('reason').textContent='从黄门进入后打开地图，探索更多房间以缩小候选。';$('candidates').replaceChildren();draw();}
 function notice(text){$('reason').textContent=text;}
 async function loadMap(id){
  const requestVersion=++mapLoadVersion;if(current?.id!==id){clearRoute();selectedPoint=null;}
@@ -500,6 +502,7 @@ async function connectionFailure(error){
  }
 }
 async function nativeRequest(payload){
+ payload={...payload,client_version:window.ANIIMO_BUILD};
  let response;
  try{response=await fetch('/api/native',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(15000)});}
  catch(e){
@@ -536,8 +539,6 @@ async function tick(epoch=captureEpoch){
   // Yield while an explicit scan or cancelled request finishes; never spin on busy.
   if(busy){delay=50;return;}
   nativeCost=null;await identify();if(epoch!==captureEpoch)return;
-  const live=result?.position&&!result.held?result:null;
-  if(nativeCost!==null)cadence.observe(nativeCost,live?.position,live?.id,Date.now());
   syncQuality();
  }catch(e){if(epoch===captureEpoch)notice('读取画面失败：'+e.message);delay=1000;}
  finally{
@@ -571,6 +572,7 @@ function capturePayload(forceFull=false){
 }
 
 async function requestMatch(payload){
+ payload={...payload,client_version:window.ANIIMO_BUILD,player_slot:playerSlot};
  const controller=new AbortController();matchController=controller;
  const timeout=setTimeout(()=>controller.abort(),15000);
  try{
@@ -580,7 +582,7 @@ async function requestMatch(payload){
  finally{clearTimeout(timeout);if(matchController===controller)matchController=null;}
 }
 async function identify(forceFull=false){
- if((!frame&&!nativeSession)||busy)return;busy=true;let g=generation;
+ if((!frame&&!nativeSession)||busy)return;busy=true;nativeCost=null;let g=generation;
  try{
  let {payload,sig}=capturePayload(forceFull),out=await requestMatch(payload);if(g!==generation)return;
  if(out.capture_wait){
@@ -596,6 +598,9 @@ async function identify(forceFull=false){
  if(out.requires_full_frame){
    ({payload,sig}=capturePayload(true));out=await requestMatch(payload);if(g!==generation)return;
  }
+ const processing=Number(out.native_capture?.processing_ms??out.processing_ms);
+ if(Number.isFinite(processing)&&processing>=0)nativeCost=processing;
+ recognitionKind=['menu','blank'].includes(out.recognition_path)?'界面检查':out.method==='minimap'?(out.recovering?'找回位置':out.status==='matched'?'小地图追踪':'小地图检查'):'地图搜索';
  recoveryActive=!!out.recovering;updateLoot(out);
  if(out.method==='minimap'){
    if(out.status==='paused'){showTrackingPaused();draw();return;}
@@ -630,9 +635,21 @@ async function identify(forceFull=false){
  if(!result&&leader){$('result').textContent='候选预览 · '+leader.name;$('reason').textContent+=' 当前仅预览候选，确认该地图可点击候选卡片开始追踪。';}
  if(!realtimeTracking){if(result&&!result.held)$('position-status').textContent='大地图位置已更新 · 实时定位已关闭';else showTrackingPaused();}
  draw();
- }catch(e){if(g!==generation)return;nativeRetryAfter=performance.now()+1000;if(nativeSession&&e.status===400)stop();recoveryActive=false;result=null;holdPosition();notice('识别暂不可用：'+e.message);draw();}finally{busy=false;}
+ }catch(e){if(g!==generation)return;nativeRetryAfter=performance.now()+1000;if(nativeSession&&e.status===400)stop();recoveryActive=false;result=null;holdPosition();notice('识别暂不可用：'+e.message);draw();}finally{
+  busy=false;
+  if(g===generation&&nativeCost!==null){const live=result?.position&&!result.held?result:null;cadence.observe(nativeCost,live?.position,live?.id,Date.now());}
+  syncQuality();
+ }
 }
 $('once').onclick=()=>identify(true);$('fit').onclick=()=>{if(isSea()){seaView='all';$('sea-region').value='all';}fit();};
+$('player-slot').onchange=()=>{
+ playerSlot=['1','2','3'].includes($('player-slot').value)?Number($('player-slot').value):null;
+ generation++;tracking=null;lastKnown=null;result=null;history=[];lastSignature=null;lastFullFrameAt=-Infinity;
+ journal.pause();routeFollower.pause();clearRoute('人物编号已更新，请重新校准。');
+ $('position-status').textContent='请打开大地图，按本局编号重新校准人物位置';
+ $('reason').textContent='只定位选定的队伍编号；换队或编号变化后请重新选择。';
+ draw();syncQuality();
+};
 for(const r of seaRegions){const o=document.createElement('option');o.value=r.id;o.textContent=r.name;$('sea-region').append(o);}
 $('sea-region').onchange=e=>{seaView=e.target.value;fit();};
 $('region-follow').onclick=()=>{seaView='auto';$('sea-region').value='auto';fit();if(!result?.position||result.id!==current?.id)notice('请先打开游戏大地图定位；也可以在分区列表手动选择。');};

@@ -1,13 +1,17 @@
 """Door-constrained registration, verified against visible floor edges only."""
-import json, math
+import json, math, os
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 from pathlib import Path
 from image_io import read_image, normalize_map_lighting
 import cv2
 import numpy as np
+from recognition_timing import stage
 
 class DoorMatcher:
     def __init__(self, root):
         self.refs=[]
+        self.workers=min(4,max(1,(os.cpu_count() or 2)//2))
         for p in (root/'data').glob('sanctum-*.json'):
             d=json.loads(p.read_text(encoding='utf8'))
             doors=[next((q for q in d['points'] if q['category']==c),None) for c in ('entrance','side-entrance')]
@@ -21,7 +25,9 @@ class DoorMatcher:
         n,l,stats,cent=cv2.connectedComponentsWithStats(mask)
         return [(s,c) for s,c in zip(stats[1:],cent[1:]) if s[4]>=min_area and .4<s[2]/s[3]<2.2]
 
-    def match(self, image, anchor=None):
+    @stage('两门证据提取')
+    def prepare(self, image):
+        """提取两门和地形证据，供快速路径与完整搜索共用。"""
         h0,w0=image.shape[:2]
         if min(h0,w0)<64:return None
         # Normalize small windows too, while bounding memory for tall inputs.
@@ -74,8 +80,36 @@ class DoorMatcher:
         qy,qx=np.where(qe>0)
         if len(qx)<40:return None
         qdist=cv2.distanceTransform(255-qe,cv2.DIST_L2,3)
-        rows=[]
-        for d,pins,ref in self.refs:
+        return SimpleNamespace(h=h,w=w,scale=scale,cy=cy,cb=cb,sy=sy,gate_visible=gate_visible,
+                               x0=x0,y0=y0,x1=x1,y1=y1,qe=qe,vm=vm,qy=qy,qx=qx,qdist=qdist,
+                               sparse=cv2.countNonZero(floor)<w*h*.025)
+
+    def agrees_with_features(self, prepared, candidate):
+        """快速确认还需独立核对两门位置，避免相似房间的局部特征误认。"""
+        pins=next((pins for d,pins,_ in self.refs if d['id']==candidate['id']),None)
+        if pins is None:return False
+        polygon=np.asarray(candidate['polygon'],dtype=float)
+        basis=np.column_stack((polygon[1]-polygon[0],polygon[3]-polygon[0]))
+        if abs(np.linalg.det(basis))<1e-8:return False
+        angle=math.degrees(math.atan2(basis[1,0],basis[0,0]))
+        if abs(angle)>14:return False
+        expected=(pins-polygon[0])@np.linalg.inv(basis).T*[prepared.w,prepared.h]
+        # 黄箭头遮挡入口时沿用原搜索的中心偏移范围；蓝门单独核对。
+        offsets=(0,) if prepared.gate_visible else (0,.2,.4,.6)
+        tolerance=max(8,prepared.w*.006)
+        yellow=min(np.linalg.norm(expected[0]-prepared.cy-[0,prepared.sy[3]*offset]) for offset in offsets)
+        return bool(yellow<=tolerance and np.linalg.norm(expected[1]-prepared.cb)<=tolerance)
+
+    @stage('两门地形搜索')
+    def match(self, image, anchor=None, prepared=None):
+        prepared=prepared if prepared is not None else self.prepare(image)
+        if prepared is None:return None
+        h,w,scale=prepared.h,prepared.w,prepared.scale
+        cy,cb,sy,gate_visible=prepared.cy,prepared.cb,prepared.sy,prepared.gate_visible
+        x0,y0,x1,y1=prepared.x0,prepared.y0,prepared.x1,prepared.y1
+        qe,vm,qy,qx,qdist=prepared.qe,prepared.vm,prepared.qy,prepared.qx,prepared.qdist
+        def evaluate(entry):
+            d,pins,ref=entry
             best=None
             # Yellow player arrow can overlap and displace the apparent gate center.
             for offset in ((0,) if gate_visible else (0,.2,.4,.6)):
@@ -97,18 +131,21 @@ class DoorMatcher:
                         backward=float(np.mean(np.exp(-qdist[ry,rx]/2.5))) if len(rx) else 0
                         score=2*forward*backward/max(.001,forward+backward)
                         if best is None or score>best[0]:best=(score,A,t+shift,angle,forward,backward)
-            if best is None:continue
+            if best is None:return None
             score,A,t,angle,fwd,bwd=best
             inv=np.linalg.inv(A)
             def project(points):return ((np.float64(points)-t)@inv.T).tolist()
             poly=project([[x0,y0],[x1,y0],[x1,y1],[x0,y1]])
             pos=project([[anchor[0]*w,anchor[1]*h]])[0] if anchor else None
-            rows.append({'id':d['id'],'name':d['name'],'score':round(score*100,2),'inliers':0,'coverage':round(len(qx)/(w*h),4),'polygon':poly,'position':pos,'center':project([[(x0+x1)/2,(y0+y1)/2]])[0],'method':'doors','edge_fit':round(score,3),'angle':round(angle,2)})
+            return {'id':d['id'],'name':d['name'],'score':round(score*100,2),'inliers':0,'coverage':round(len(qx)/(w*h),4),'polygon':poly,'position':pos,'center':project([[(x0+x1)/2,(y0+y1)/2]])[0],'method':'doors','edge_fit':round(score,3),'angle':round(angle,2)}
+        # map 保留原始候选顺序，评分相同的情况仍沿用上游的排序。
+        with ThreadPoolExecutor(max_workers=self.workers,thread_name_prefix='门匹配') as pool:
+            rows=[row for row in pool.map(evaluate,self.refs) if row is not None]
         # A sparse entrance needs a north-up refinement: an arrow covering the
         # gate shifts its color centroid and must not rotate the entire map.
         # References come from our existing map atlas, not labelled test captures.
         rows.sort(key=lambda r:r['score'],reverse=True)
-        if rows and rows[0]['score']<70 and cv2.countNonZero(floor)<w*h*.025:
+        if rows and rows[0]['score']<70 and prepared.sparse:
             lookup={d['id']:(d,pins,ref) for d,pins,ref in self.refs}
             for row in rows[:5]:
                 if abs(row['angle'])>4:continue

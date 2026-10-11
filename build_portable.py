@@ -9,18 +9,24 @@ import shutil
 import subprocess
 import sys
 import zipfile
+import re
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from local_version import local_version
 
 ROOT=Path(__file__).resolve().parent
 SOURCE_RUNTIME=Path(sys.executable).parent
-OUTPUT=ROOT/'portable'/'aniimo_map_helper_v0.4.3'
+VERSION=local_version('0.4.3')
+OUTPUT=ROOT/'portable'/f'aniimo_map_helper_v{VERSION}'
 if OUTPUT.exists(): raise SystemExit('Output exists; choose a new version before rebuilding.')
 APP=OUTPUT/'app'; RUNTIME=OUTPUT/'runtime'
 APP.mkdir(parents=True); (RUNTIME/'Lib/site-packages').mkdir(parents=True)
-for name in ('field_notes.py','field-notes.js','route-goals.js','hotkeys.py','hotkey-settings.js','native_capture.py','capture_process.py','server.py','image_io.py','matcher.py','loot_detector.py','door_matcher.py','player.py','minimap.py','relocalizer.py','route_planner.py','overlay_bridge.py','overlay_window.py','index.html','app.js','assist.js','i18n.js','style.css'):
+shutil.copy2(ROOT/'masked_correlation.py',APP/'masked_correlation.py')
+for name in ('recognition_timing.py','frontend_delivery.py','scene_gate.py'):shutil.copy2(ROOT/name,APP/name)
+for name in ('feature_matcher.py','local_version.py','field_notes.py','field-notes.js','route-goals.js','hotkeys.py','hotkey-settings.js','native_capture.py','capture_process.py','server.py','image_io.py','matcher.py','loot_detector.py','door_matcher.py','player.py','minimap.py','relocalizer.py','route_planner.py','overlay_bridge.py','overlay_window.py','index.html','app.js','assist.js','i18n.js','style.css'):
     shutil.copy2(ROOT/name,APP/name)
 (APP/'data').mkdir()
 catalog=json.loads((ROOT/'data/catalog.json').read_text(encoding='utf-8'))
-for name in ['catalog.json','player-egg-template.png']+[m['id']+ext for m in catalog for ext in ('.json','.webp')]:
+for name in ['catalog.json','player-egg-template.png','screen-team-template.png','screen-inventory-template.png']+[f'player-number-{slot}-template.png' for slot in (1,2,3)]+[m['id']+ext for m in catalog for ext in ('.json','.webp')]:
     shutil.copy2(ROOT/'data'/name,APP/'data'/name)
 (APP/'data/icons').mkdir()
 icon_manifest=json.loads((ROOT/'data/icons/manifest.json').read_text(encoding='utf8'))
@@ -49,8 +55,16 @@ for name,digest,size in csv.reader(io.StringIO(record.read_text(encoding='utf-8'
 with record.open('w',encoding='utf-8',newline='') as output:
     csv.writer(output,lineterminator='\n').writerows(rows)
 compiler=Path('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe')
+# 保留上游启动器源码，只在构建副本中写入本地修订号。
+launcher_source=ROOT/'build'/'本地启动器.cs'
+launcher_source.parent.mkdir(exist_ok=True)
+launcher_text,count=re.subn(r'const string AppVersion = "[^"]+";',f'const string AppVersion = "{VERSION}";',(ROOT/'portable_launcher.cs').read_text(encoding='utf-8'))
+if count!=1:raise SystemExit('未找到唯一的启动器版本字段，请检查上游变更。')
+if 'new ProcessStartInfo(Url)' not in launcher_text:raise SystemExit('启动器打开页面的方式已变化，请检查上游变更。')
+launcher_text=launcher_text.replace('new ProcessStartInfo(Url)','new ProcessStartInfo(Url + "/?build=" + Uri.EscapeDataString(AppVersion))')
+launcher_source.write_text(launcher_text,encoding='utf-8-sig')
 for output,defines in [('启动助手.exe',[]),('退出助手.exe',['/define:STOP'])]:
-    subprocess.run([str(compiler),'/nologo','/target:winexe','/reference:System.Windows.Forms.dll','/reference:System.Management.dll','/out:'+str(OUTPUT/output),*defines,str(ROOT/'portable_launcher.cs'),str(ROOT/'exit_all.cs')],check=True)
+    subprocess.run([str(compiler),'/nologo','/target:winexe','/reference:System.Windows.Forms.dll','/reference:System.Management.dll','/out:'+str(OUTPUT/output),*defines,str(launcher_source),str(ROOT/'exit_all.cs')],check=True)
 DIAGNOSTICS=OUTPUT/'diagnostics'
 (DIAGNOSTICS/'upstream/windows_capture').mkdir(parents=True)
 for name in ('run_diagnostics.py','environment.ps1','说明.txt'):
@@ -114,9 +128,15 @@ shutil.copy2(ROOT/'更新说明.txt',OUTPUT/'更新说明.txt')
 
 地图及点位来源：Wikily /《伊莫》。相关素材的权利归原权利人所有。
 第三方运行库许可保留在 runtime/LICENSE.txt 及 runtime/Lib/site-packages 下的 *.dist-info 目录。
-''',encoding='utf-8-sig')
+'''.replace('便携版 v0.4.3',f'便携版 v{VERSION}',1),encoding='utf-8-sig')
 shutil.copy2(ROOT/'README_EN.md',OUTPUT/'README_EN.md')
 shutil.copy2(ROOT/'THIRD_PARTY_NOTICES.md',OUTPUT/'THIRD_PARTY_NOTICES.md')
+shutil.copy2(ROOT/'本地优化说明.md',OUTPUT/'本地优化说明.md')
+(OUTPUT/'checks').mkdir()
+shutil.copy2(ROOT/'checks/识别性能对照.json',OUTPUT/'checks/识别性能对照.json')
+shutil.copy2(ROOT/'checks/实测界面性能对照.json',OUTPUT/'checks/实测界面性能对照.json')
+shutil.copy2(ROOT/'checks/队伍编号定位实测.json',OUTPUT/'checks/队伍编号定位实测.json')
+shutil.copy2(ROOT/'checks/非地图画面性能对照.json',OUTPUT/'checks/非地图画面性能对照.json')
 archive=Path(str(OUTPUT)+'.zip')
 with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
     for file in OUTPUT.rglob('*'):

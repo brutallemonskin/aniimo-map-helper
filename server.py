@@ -10,9 +10,13 @@ from route_planner import RoutePlanner
 from native_capture import windows, small_preview
 from capture_process import IsolatedCapture
 from field_notes import FieldNotes
+from local_version import local_version
+from frontend_delivery import versioned_html
+from recognition_timing import record_result, snapshot as performance_snapshot
 
 ROOT=Path(__file__).resolve().parent
 PORT=int(os.environ.get('ANIIMO_PORT','18731'))
+APP_VERSION=local_version('0.4.3')
 matcher=Matcher()
 overlay=OverlayBridge(ROOT)
 route_planner=RoutePlanner(ROOT)
@@ -47,10 +51,15 @@ class LocalHTTPServer(ThreadingHTTPServer):
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self,*a,**kw): super().__init__(*a,directory=str(ROOT),**kw)
     def log_message(self,*a): pass
+    def end_headers(self):
+        if not urllib.parse.urlparse(self.path).path.startswith('/data/'):
+            self.send_header('Cache-Control','no-store, max-age=0')
+        super().end_headers()
     def handle(self):
         try: return super().handle()
         except ConnectionError: pass  # Browser cancelled/reloaded; no second response.
     def json(self,obj,status=200):
+        if self.path=='/api/match' and status==200:record_result(obj)
         b=json.dumps(obj,ensure_ascii=False).encode()
         try:
             self.send_response(status)
@@ -58,13 +67,17 @@ class Handler(SimpleHTTPRequestHandler):
         except ConnectionError: pass
     def do_GET(self):
         path=urllib.parse.urlparse(self.path).path
-        if path=='/api/status': return self.json({'ready':matcher.ready,'indexed':len(matcher.maps),'error':matcher.error,'version':'0.4.3'})
+        if path=='/api/status': return self.json({'ready':matcher.ready,'indexed':len(matcher.maps),'error':matcher.error,'version':APP_VERSION,'compute':matcher.features.status()})
+        if path=='/api/performance': return self.json(performance_snapshot())
         if path=='/api/overlay': return self.json(overlay.status())
         if path=='/api/overlay/hotkeys': return self.json(overlay.status()['hotkeys'])
         if path=='/api/overlay/frame':
             query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             return self.json(overlay.snapshot(query.get('image_key',[None])[0]))
-        if path=='/': self.path='/index.html'
+        if path in ('/','/index.html'):
+            body=versioned_html((ROOT/'index.html').read_text(encoding='utf-8'),APP_VERSION).encode('utf-8')
+            self.send_response(200);self.send_header('Content-Type','text/html; charset=utf-8')
+            self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
         elif path not in ('/index.html','/app.js','/assist.js','/route-goals.js','/field-notes.js','/hotkey-settings.js','/style.css','/i18n.js') and not (path.startswith('/data/') and '..' not in urllib.parse.unquote(path)):
             return self.send_error(404)
         return super().do_GET()
@@ -105,6 +118,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if action=='list':return self.json({'windows':windows()})
                 if action=='stop':return self.json(native.stop(d.get('session','')))
                 if action=='start':
+                    if d.get('client_version')!=APP_VERSION:
+                        return self.json({'error':'页面版本已过期，请重新打开当前版本启动器或按 Ctrl+F5 刷新。','refresh_required':True},409)
                     interval=d.get('interval',500)
                     if type(interval) is not int or interval not in (250,500,1000,2000,3000):raise ValueError('无效间隔')
                     return self.json(native.start(d.get('window'),interval,d.get('window_pid')))
@@ -145,6 +160,8 @@ class Handler(SimpleHTTPRequestHandler):
             if not 0<n<12_000_000: return self.json({'error':'图片过大'},413)
             d=json.loads(self.rfile.read(n))
             native_request=isinstance(d,dict) and bool(d.get('native_session'))
+            if native_request and d.get('client_version')!=APP_VERSION:
+                return self.json({'error':'页面版本与后台不一致，请重新打开当前版本启动器或按 Ctrl+F5 刷新。','refresh_required':True},409)
             if d.get('native_session'):
                 interval=d.get('interval',500)
                 if type(interval) is not int or interval not in (250,500,1000,2000,3000):raise ValueError('无效本地采集参数')
@@ -167,6 +184,9 @@ class Handler(SimpleHTTPRequestHandler):
             if tracking and tracking.get('id')=='egg-heist-team-mode':tracking=None
             realtime_tracking=d.get('realtime_tracking',True)
             if not isinstance(realtime_tracking,bool):raise ValueError('无效实时定位选项')
+            player_slot=d.get('player_slot')
+            if player_slot is not None and (type(player_slot) is not int or player_slot not in (1,2,3)):
+                raise ValueError('本局人物编号必须为 1P、2P 或 3P。')
             observation=d.get('observation')
             if observation is not None:
                 import math,re
@@ -193,7 +213,7 @@ class Handler(SimpleHTTPRequestHandler):
                         if not answer.get('requires_full_frame'):
                             native_meta['processing_ms']=round((time.perf_counter()-inference_started)*1000,2)
                             answer['native_capture']=native_meta;return self.json(answer)
-                answer=matcher.match(im,anchor,tracking,outdoor_mode,realtime_tracking=realtime_tracking,observation=observation)
+                answer=matcher.match(im,anchor,tracking,outdoor_mode,realtime_tracking=realtime_tracking,observation=observation,player_slot=player_slot)
                 native_meta['signature']=np.rint(cv2.resize(im,(32,32)).sum(axis=2)/24).astype(int).ravel().tolist()
                 native_meta['processing_ms']=round((time.perf_counter()-inference_started)*1000,2)
                 answer['native_capture']=native_meta;return self.json(answer)
@@ -211,7 +231,8 @@ class Handler(SimpleHTTPRequestHandler):
                     if scene is None or max(scene.shape[:2])>800:raise ValueError('无效掉落预览')
                 answer=matcher.match_crop(im,tracking,realtime_tracking,scene,observation)
             else:
-                answer=matcher.match(im,anchor,tracking,outdoor_mode,realtime_tracking=realtime_tracking,observation=observation)
+                answer=matcher.match(im,anchor,tracking,outdoor_mode,realtime_tracking=realtime_tracking,observation=observation,player_slot=player_slot)
+            answer['processing_ms']=round((time.perf_counter()-inference_started)*1000,2)
             self.json(answer)
         except Exception as e:
             if native_request:
@@ -228,7 +249,7 @@ if __name__=='__main__':
     (ROOT/'server.pid').write_text(str(__import__('os').getpid()))
     threading.Thread(target=matcher.build,daemon=True).start()
     print(f'Local map helper: http://127.0.0.1:{PORT}',flush=True)
-    if '--no-browser' not in sys.argv: webbrowser.open(f'http://127.0.0.1:{PORT}')
+    if '--no-browser' not in sys.argv: webbrowser.open(f'http://127.0.0.1:{PORT}/?build='+urllib.parse.quote(APP_VERSION,safe=''))
     try: server.serve_forever()
     finally:
         native.stop()

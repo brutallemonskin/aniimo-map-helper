@@ -8,6 +8,8 @@ from image_io import read_image
 import cv2
 import numpy as np
 from relocalizer import Relocalizer, motion_agrees
+from masked_correlation import MaskedCorrelation
+from recognition_timing import stage
 
 
 class MinimapTracker:
@@ -28,6 +30,7 @@ class MinimapTracker:
         return MinimapTracker.extract_crop(crop)
 
     @staticmethod
+    @stage('小地图画面检查')
     def extract_crop(crop):
         """Validate the HUD on every crop; a missing HUD requests a full frame."""
         crop=cv2.resize(crop,(200,200))
@@ -36,7 +39,7 @@ class MinimapTracker:
         yellow=cv2.inRange(hsv,(22,90,180),(40,255,255))
         n,labels,stats,cent=cv2.connectedComponentsWithStats(yellow)
         arrows=[(s,c) for s,c in zip(stats[1:],cent[1:]) if 25<s[4]<900 and .45<s[2]/s[3]<2.1 and np.linalg.norm(c-[100,100])<25]
-        circles=cv2.HoughCircles(raw_gray,cv2.HOUGH_GRADIENT,1,100,param1=70,param2=25,minRadius=90,maxRadius=105)
+        circles=None if len(arrows)==1 else cv2.HoughCircles(raw_gray,cv2.HOUGH_GRADIENT,1,100,param1=70,param2=25,minRadius=90,maxRadius=105)
         rings=[] if circles is None else [c for c in circles[0] if np.linalg.norm(c[:2]-[100,100])<10]
         if len(arrows)==1:
             s,point=arrows[0]
@@ -62,6 +65,7 @@ class MinimapTracker:
         dungeon_color=float(np.mean(hsv[:,:,1][interior]<55))>.72
         return gray,mask,point,dungeon_color
 
+    @stage('小地图匹配')
     def match(self, sample, map_id=None, previous=None, previous_scale=None, observation=None, search_elapsed=0):
         missing={'status':'unknown','method':'minimap','candidates':[], 'position_source':None}
         if not map_id:
@@ -102,11 +106,12 @@ class MinimapTracker:
             return self.recover(sample,map_id,previous,previous_scale,observation,dict(missing,reason='起点超出地图，正在尝试重新定位。'))
         scales=np.linspace(.65,1.55,25) if previous_scale is None else np.linspace(previous_scale*.94,previous_scale*1.06,9)
         best=None;peaks=[]
+        correlation=MaskedCorrelation(gray,mask)
         for scale in scales:
             target=cv2.resize(region,None,fx=float(scale),fy=float(scale))
             if min(target.shape)<200:continue
             target=cv2.GaussianBlur(target,(5,5),0)
-            score=cv2.matchTemplate(target,gray,cv2.TM_CCOEFF_NORMED,mask=mask)
+            score=correlation.match(target)
             score=np.nan_to_num(score,nan=-1,posinf=-1,neginf=-1)
             _,value,_,loc=cv2.minMaxLoc(score)
             pos=(np.array(loc)+point)/scale+[x0,y0]

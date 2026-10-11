@@ -1,0 +1,23 @@
+// 验证实际耗时与平滑平均分开，并保留自动档的响应间隔上限。
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const vm=require('node:vm');
+const source=fs.readFileSync(path.join(__dirname,'..','assist.js'),'utf8');
+const {AdaptiveCadence}=vm.runInNewContext(source+'\nNavigatorTools;');
+const cadence=new AdaptiveCadence();
+cadence.observe(8337,null,null,0);
+assert.equal(cadence.latest,8337);
+assert.equal(cadence.cost,8337);
+assert.equal(cadence.interval,1000);
+cadence.observe(100,[10,10],'sanctum-32',1000);
+assert.equal(cadence.latest,100);
+assert.equal(cadence.cost,6277.75);
+cadence.observe(NaN,null,null,2000);
+assert.equal(cadence.latest,100);
+cadence.reset();
+cadence.observe(50,[10,10],'sanctum-32',0);
+assert.equal(cadence.interval,250);
+cadence.observe(50,[10,10],'sanctum-32',5000);
+assert.equal(cadence.interval,1000);
+console.log('耗时显示和自动间隔检查通过。');

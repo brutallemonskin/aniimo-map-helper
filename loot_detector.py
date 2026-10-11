@@ -2,6 +2,9 @@
 import cv2
 import numpy as np
 
+from recognition_timing import stage
+
+@stage('彩虹掉落检测')
 def detect_rainbow_beams(image):
     if image is None or image.ndim!=3:return []
     h0,w0=image.shape[:2]
